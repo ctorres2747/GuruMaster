@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GuruMaster — Plataforma IA para Mantenimiento Industrial</title>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg-base:     #0d1117;
+    --bg-surface:  #161b22;
+    --bg-raised:   #1c2330;
+    --bg-hover:    #212936;
+    --border:      #2a3441;
+    --border-light: #344054;
+
+    --teal:        #00b894;
+    --teal-dim:    #00796b;
+    --teal-glow:   rgba(0,184,148,0.15);
+    --teal-subtle: rgba(0,184,148,0.07);
+
+    --amber:       #f59e0b;
+    --amber-dim:   rgba(245,158,11,0.15);
+    --red:         #ef4444;
+    --red-dim:     rgba(239,68,68,0.15);
+    --blue:        #3b82f6;
+    --blue-dim:    rgba(59,130,246,0.15);
+
+    --text-primary:   #e6edf3;
+    --text-secondary: #8b949e;
+    --text-muted:     #484f58;
+    --text-teal:      #00b894;
+
+    --font-sans: 'IBM Plex Sans', sans-serif;
+    --font-mono: 'IBM Plex Mono', monospace;
+
+    --radius-sm: 4px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+  }
+
+  html, body, #root { height: 100%; width: 100%; overflow: hidden; }
+  body { font-family: var(--font-sans); background: var(--bg-base); color: var(--text-primary); }
+
+  /* Scrollbars */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 2px; }
+
+  /* Pulse animation for live indicators */
+  @keyframes pulse-ring {
+    0% { transform: scale(0.8); opacity: 1; }
+    100% { transform: scale(2); opacity: 0; }
+  }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+  @keyframes slide-up {
+    from { opacity:0; transform: translateY(8px); }
+    to   { opacity:1; transform: translateY(0); }
+  }
+  @keyframes typing {
+    0%   { width: 0; }
+    100% { width: 100%; }
+  }
+  @keyframes gauge-fill {
+    from { stroke-dashoffset: 220; }
+    to   { stroke-dashoffset: var(--target); }
+  }
+  @keyframes shimmer {
+    0%   { background-position: -400px 0; }
+    100% { background-position: 400px 0; }
+  }
+
+  .animate-in { animation: slide-up 0.3s ease both; }
+  .cursor-blink { animation: blink 1s step-end infinite; }
+
+  /* Command bar spotlight */
+  .cmd-overlay {
+    position: fixed; inset: 0; z-index: 100;
+    background: rgba(0,0,0,0.65);
+    backdrop-filter: blur(4px);
+    display: flex; align-items: flex-start; justify-content: center;
+    padding-top: 12vh;
+  }
+  .cmd-box {
+    width: min(640px, 92vw);
+    background: var(--bg-raised);
+    border: 1px solid var(--teal-dim);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 0 60px rgba(0,184,148,0.18), 0 24px 48px rgba(0,0,0,0.5);
+    overflow: hidden;
+  }
+
+  /* Telemetry gauge arc */
+  .gauge-arc {
+    stroke-dasharray: 220;
+    stroke-dashoffset: var(--target);
+    transition: stroke-dashoffset 1.2s cubic-bezier(0.34,1.56,0.64,1);
+    stroke-linecap: round;
+    fill: none;
+  }
+
+  /* Document highlight */
+  .doc-highlight {
+    background: linear-gradient(90deg, var(--teal-glow), transparent);
+    border-left: 2px solid var(--teal);
+    animation: slide-up 0.4s ease both;
+  }
+
+  /* Typing indicator */
+  .typing-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--teal);
+    animation: blink 1.2s ease-in-out infinite;
+  }
+  .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+  .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback } = React;
+
+// ─── MOCK DATA ───────────────────────────────────────────────────────────────
+
+const ASSETS = [
+  { id: 'BOM-001', name: 'Bomba Centrífuga BOM-001', type: 'pump', location: 'Línea A – Sala de Bombas', status: 'warning' },
+  { id: 'COM-032', name: 'Compresor Reciprocante COM-032', type: 'compressor', location: 'Unidad de Gas – Nivel 2', status: 'ok' },
+  { id: 'HEX-007', name: 'Intercambiador de Calor HEX-007', type: 'heat_exchanger', location: 'Planta de Proceso – Zona C', status: 'critical' },
+];
+
+const TELEMETRY = {
+  'BOM-001': { temp: 87, tempMax: 120, pressure: 4.2, pressureMax: 8, vibration: 7.1, vibrationMax: 12 },
+  'COM-032': { temp: 65, tempMax: 120, pressure: 6.8, pressureMax: 8, vibration: 3.2, vibrationMax: 12 },
+  'HEX-007': { temp: 112, tempMax: 120, pressure: 2.1, pressureMax: 8, vibration: 11.8, vibrationMax: 12 },
+};
+
+const TIMELINE = {
+  'BOM-001': [
+    { date: '28 Abr 2026', type: 'inspection', severity: 'info', title: 'Inspección visual rutinaria', tech: 'J. Martínez', note: 'Sin anomalías observadas. Sellos en buen estado.' },
+    { date: '15 Abr 2026', type: 'alarm',      severity: 'warning', title: 'Alarma: Vibración elevada',   tech: 'Sistema',    note: 'Vibración: 8.3 mm/s. Límite nominal: 7.5 mm/s.' },
+    { date: '02 Abr 2026', type: 'repair',     severity: 'ok',      title: 'Cambio de rodamientos',       tech: 'C. López',   note: 'Rodamientos 6205-2RS reemplazados. Lubrificación OK.' },
+    { date: '10 Mar 2026', type: 'pm',         severity: 'info',    title: 'PM Semestral completado',     tech: 'C. López',   note: 'Alineación láser: 0.02 mm. Dentro de tolerancia.' },
+  ],
+  'COM-032': [
+    { date: '30 Abr 2026', type: 'inspection', severity: 'info', title: 'Verificación de válvulas', tech: 'R. Soto', note: 'Válvulas de descarga en óptimas condiciones.' },
+    { date: '18 Abr 2026', type: 'pm', severity: 'ok', title: 'Cambio de filtros de aceite', tech: 'R. Soto', note: 'Filtros tipo Fleetguard LF9009. Presión aceite: 3.8 bar.' },
+  ],
+  'HEX-007': [
+    { date: '01 May 2026', type: 'alarm', severity: 'critical', title: 'CRÍTICO: Temperatura fuera de rango', tech: 'Sistema', note: 'Temperatura: 112°C. Límite: 110°C. Requiere acción inmediata.' },
+    { date: '28 Abr 2026', type: 'alarm', severity: 'warning', title: 'Advertencia: Vibración anómala', tech: 'Sistema', note: 'Vibración: 11.8 mm/s. Posible obstrucción en placas.' },
+    { date: '20 Abr 2026', type: 'inspection', severity: 'warning', title: 'Incrustaciones detectadas', tech: 'A. Fuentes', note: 'Depósitos calcáreos en placas. Eficiencia reducida ~18%.' },
+  ],
+};
+
+const DOC_CONTENT = {
+  'BOM-001': [
+    { id: 'd1', title: 'Manual de Operación – BOM-001', type: 'manual', pages: 142 },
+    { id: 'd2', title: 'Diagrama P&ID – Línea A', type: 'pid', pages: 4 },
+    { id: 'd3', title: 'Ficha Técnica Rodamiento 6205-2RS', type: 'spec', pages: 8 },
+  ],
+  'COM-032': [
+    { id: 'd4', title: 'Manual Compresor COM-032 Rev.3', type: 'manual', pages: 210 },
+    { id: 'd5', title: 'Procedimiento de Arranque Seguro', type: 'procedure', pages: 6 },
+  ],
+  'HEX-007': [
+    { id: 'd6', title: 'Manual Intercambiador HEX-007', type: 'manual', pages: 88 },
+    { id: 'd7', title: 'Diagrama P&ID – Zona C', type: 'pid', pages: 3 },
+    { id: 'd8', title: 'Procedimiento de Limpieza Química', type: 'procedure', pages: 12 },
+  ],
+};
+
+const GURU_RESPONSES = [
+  {
+    trigger: ['vibración', 'vibracion', 'vibra'],
+    highlightDoc: 'd3',
+    highlightSection: 'Sección 4.2 – Diagnóstico de Vibración',
+    text: `Entendido. Analizando el historial de **vibración de BOM-001**.\n\nLa lectura actual de **7.1 mm/s** está dentro del límite nominal (7.5 mm/s), pero la tendencia es ascendente desde el evento del 15 de Abril.\n\n**Mi diagnóstico preliminar:**\n1. Posible desequilibrio del impulsor por sedimentos\n2. Los rodamientos cambiados en Abril pueden requerir re-alineación fina\n3. Verificar la cavitación: revisar presión de succión vs. NPSHr\n\n📄 He localizado la Sección 4.2 del manual sobre diagnóstico de vibración.`,
+  },
+  {
+    trigger: ['temperatura', 'temp', 'calor', 'sobrecal'],
+    highlightDoc: 'd8',
+    highlightSection: 'Sección 7.1 – Procedimiento de Limpieza',
+    text: `⚠️ **Situación crítica detectada en HEX-007**.\n\nTemperatura actual: **112°C** — 2°C sobre el límite operacional.\n\n**Acción recomendada inmediata:**\n1. Reducir caudal de proceso un 15% hasta estabilización\n2. Verificar apertura de válvula V-2304 (diagrama P&ID Zona C)\n3. Programar limpieza química de placas en próximas 48h\n\n📄 Abriendo el Procedimiento de Limpieza Química — Sección 7.1.`,
+  },
+  {
+    trigger: ['arranque', 'encender', 'iniciar', 'start'],
+    highlightDoc: 'd5',
+    highlightSection: 'Sección 2 – Secuencia de Arranque',
+    text: `Procedimiento de arranque seguro para **COM-032**.\n\n**Pre-arranque (lista de verificación):**\n- [ ] Nivel de aceite: mínimo línea superior\n- [ ] Presión de línea de gas: 1.2–1.5 bar\n- [ ] Temperatura ambiente: >5°C\n- [ ] Válvulas de succión/descarga: abiertas\n\n**Secuencia:**\n1. Activar lubricación previa (30 seg)\n2. Energizar motor (arranque suave)\n3. Monitorear temperatura cojinetes (max 80°C en 5 min)\n\n📄 Ver Sección 2 del Procedimiento de Arranque Seguro.`,
+  },
+  {
+    trigger: ['mantenimiento', 'pm', 'preventivo', 'cambio'],
+    highlightDoc: 'd1',
+    highlightSection: 'Sección 8.4 – Plan de Mantenimiento Preventivo',
+    text: `Revisando el **Plan de Mantenimiento Preventivo** del activo seleccionado.\n\n**Próximas tareas programadas:**\n- **Semana 19:** Lubricación de rodamientos (cada 500h)\n- **Semana 22:** Inspección de sellos mecánicos\n- **Julio 2026:** PM Semestral completo\n\n**Estado general:** El equipo lleva 312 horas desde el último PM. El MTBF histórico es de 1,240 horas.\n\n📄 Consultando Sección 8.4 del Manual de Operación.`,
+  },
+];
+
+const DEFAULT_MESSAGES = [
+  {
+    role: 'guru',
+    text: `Bienvenido de vuelta, técnico. Soy tu **Oráculo de Mantenimiento**.\n\nHe analizado el estado actual de los activos en planta. **HEX-007** requiere atención inmediata — temperatura fuera de rango operacional.\n\nPuedes preguntarme sobre diagnóstico de fallas, procedimientos, historial de mantenimiento o interpretar lecturas de telemetría. ¿Cómo puedo asistirte?`,
+    time: 'Ahora',
+    docs: [],
+  }
+];
+
+// ─── ICONS ───────────────────────────────────────────────────────────────────
+const Icon = ({ name, size = 16, color, style }) => {
+  const ref = useRef(null);
+  useEffect(() => {
+    if (ref.current && window.lucide) {
+      ref.current.innerHTML = '';
+      const icon = lucide.createElement(lucide[name.split('').map((c,i) => i===0?c.toUpperCase():c).join('').replace(/-([a-z])/g, g => g[1].toUpperCase())]);
+      if (icon) {
+        icon.setAttribute('width', size);
+        icon.setAttribute('height', size);
+        if (color) icon.setAttribute('stroke', color);
+        ref.current.appendChild(icon);
+      }
+    }
+  }, [name, size, color]);
+  return <span ref={ref} style={{ display:'inline-flex', alignItems:'center', ...style }} />;
+};
+
+// ─── STATUS BADGE ────────────────────────────────────────────────────────────
+const StatusBadge = ({ status }) => {
+  const map = { ok: ['#00b894','OPERATIVO'], warning: ['#f59e0b','ADVERTENCIA'], critical: ['#ef4444','CRÍTICO'] };
+  const [color, label] = map[status] || map.ok;
+  return (
+    <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+      <div style={{ position:'relative', width:8, height:8 }}>
+        <div style={{ width:8, height:8, borderRadius:'50%', background:color }} />
+        <div style={{
+          position:'absolute', inset:0, borderRadius:'50%', background:color,
+          animation:'pulse-ring 2s ease-out infinite'
+        }} />
+      </div>
+      <span style={{ fontSize:10, fontFamily:'var(--font-mono)', fontWeight:600, color, letterSpacing:'0.1em' }}>{label}</span>
+    </div>
+  );
+};
+
+// ─── TELEMETRY GAUGE ─────────────────────────────────────────────────────────
+const Gauge = ({ value, max, label, unit, warn, crit }) => {
+  const pct = Math.min(value / max, 1);
+  const angle = pct * 220;
+  const r = 34;
+  const cx = 44, cy = 48;
+  const startAngle = -200;
+  const toRad = d => (d * Math.PI) / 180;
+  const arcPath = (start, end, radius) => {
+    const s = { x: cx + radius * Math.cos(toRad(start)), y: cy + radius * Math.sin(toRad(start)) };
+    const e = { x: cx + radius * Math.cos(toRad(end)),   y: cy + radius * Math.sin(toRad(end)) };
+    const large = end - start > 180 ? 1 : 0;
+    return `M ${s.x} ${s.y} A ${radius} ${radius} 0 ${large} 1 ${e.x} ${e.y}`;
+  };
+  const color = value >= crit ? '#ef4444' : value >= warn ? '#f59e0b' : '#00b894';
+  return (
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
+      <svg width="88" height="72" viewBox="0 0 88 72">
+        <path d={arcPath(startAngle, startAngle + 220, r)} stroke="var(--border)" strokeWidth="5" fill="none" strokeLinecap="round" />
+        <path
+          d={arcPath(startAngle, startAngle + angle, r)}
+          stroke={color} strokeWidth="5" fill="none" strokeLinecap="round"
+          style={{ transition:'d 1.2s cubic-bezier(0.34,1.56,0.64,1), stroke 0.5s' }}
+        />
+        <text x={cx} y={cy - 6} textAnchor="middle" fontSize="13" fontWeight="700" fill={color} fontFamily="var(--font-mono)">{value}</text>
+        <text x={cx} y={cy + 8} textAnchor="middle" fontSize="9" fill="var(--text-muted)" fontFamily="var(--font-mono)">{unit}</text>
+      </svg>
+      <span style={{ fontSize:10, color:'var(--text-secondary)', fontFamily:'var(--font-mono)', letterSpacing:'0.05em' }}>{label}</span>
+    </div>
+  );
+};
+
+// ─── MARKDOWN-LIKE TEXT RENDERER ─────────────────────────────────────────────
+const GuruText = ({ text }) => {
+  const lines = text.split('\n');
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+      {lines.map((line, i) => {
+        if (!line) return <div key={i} style={{ height:6 }} />;
+        const parts = line.split(/(\*\*[^*]+\*\*)/g).map((part, j) =>
+          part.startsWith('**') ? <strong key={j} style={{ color:'var(--text-primary)', fontWeight:600 }}>{part.slice(2,-2)}</strong> : part
+        );
+        const isCheckbox = line.startsWith('- [ ]');
+        const isBullet = line.startsWith('- ');
+        const isNumbered = /^\d+\./.test(line);
+        const isDocRef = line.startsWith('📄');
+        if (isDocRef) return (
+          <div key={i} style={{ marginTop:8, padding:'8px 12px', background:'var(--teal-subtle)', border:'1px solid var(--teal-dim)', borderRadius:6, fontSize:13, color:'var(--text-teal)' }}>
+            {parts}
+          </div>
+        );
+        if (isCheckbox) return (
+          <div key={i} style={{ display:'flex', gap:8, alignItems:'center', paddingLeft:8 }}>
+            <div style={{ width:14, height:14, border:'1.5px solid var(--border-light)', borderRadius:3, flexShrink:0 }} />
+            <span style={{ fontSize:13, color:'var(--text-secondary)' }}>{line.slice(6)}</span>
+          </div>
+        );
+        if (isBullet || isNumbered) return (
+          <div key={i} style={{ display:'flex', gap:8, paddingLeft:8 }}>
+            <span style={{ color:'var(--teal)', fontSize:13, flexShrink:0 }}>{isNumbered ? line.match(/^\d+/)[0]+'.' : '·'}</span>
+            <span style={{ fontSize:13, color:'var(--text-secondary)' }}>{isNumbered ? parts.slice(1) : parts.slice(1)}</span>
+          </div>
+        );
+        return <p key={i} style={{ fontSize:13, lineHeight:1.65, color:'var(--text-secondary)' }}>{parts}</p>;
+      })}
+    </div>
+  );
+};
+
+// ─── MAIN APP ─────────────────────────────────────────────────────────────────
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "accentColor": "#00b894",
+  "darkMode": true,
+  "fontSize": 13,
+  "compactLayout": false,
+  "showTimeline": true
+}/*EDITMODE-END*/;
+
+function App() {
+  const [tweaks, setTweak] = useTweaks(TWEAK_DEFAULTS);
+
+  const [activeAsset, setActiveAsset] = useState(ASSETS[0]);
+  const [messages, setMessages] = useState(DEFAULT_MESSAGES);
+  const [input, setInput] = useState('');
+  const [cmdOpen, setCmdOpen] = useState(false);
+  const [cmdQuery, setCmdQuery] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+  const [activeDoc, setActiveDoc] = useState(DOC_CONTENT['BOM-001'][0]);
+  const [highlightSection, setHighlightSection] = useState(null);
+  const [telemetry, setTelemetry] = useState(TELEMETRY[activeAsset.id]);
+  const [sidebarTab, setSidebarTab] = useState('telemetry'); // 'telemetry' | 'timeline'
+  const [listening, setListening] = useState(false);
+  const chatEndRef = useRef(null);
+  const inputRef = useRef(null);
+  const cmdRef = useRef(null);
+
+  // Live telemetry flicker
+  useEffect(() => {
+    const id = setInterval(() => {
+      setTelemetry(prev => ({
+        temp: +(prev.temp + (Math.random() - 0.5) * 1.2).toFixed(1),
+        pressure: +(prev.pressure + (Math.random() - 0.5) * 0.08).toFixed(2),
+        vibration: +(prev.vibration + (Math.random() - 0.5) * 0.15).toFixed(2),
+        tempMax: prev.tempMax, pressureMax: prev.pressureMax, vibrationMax: prev.vibrationMax,
+      }));
+    }, 2000);
+    return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    setTelemetry(TELEMETRY[activeAsset.id]);
+    setActiveDoc(DOC_CONTENT[activeAsset.id][0]);
+    setHighlightSection(null);
+  }, [activeAsset]);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, isTyping]);
+
+  useEffect(() => {
+    if (cmdOpen) cmdRef.current?.focus();
+  }, [cmdOpen]);
+
+  useEffect(() => {
+    const handler = e => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); setCmdOpen(o => !o); }
+      if (e.key === 'Escape') setCmdOpen(false);
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
+  const sendMessage = useCallback((text = input) => {
+    if (!text.trim()) return;
+    const userMsg = { role: 'user', text: text.trim(), time: new Date().toLocaleTimeString('es', {hour:'2-digit',minute:'2-digit'}), docs: [] };
+    setMessages(m => [...m, userMsg]);
+    setInput('');
+    setCmdOpen(false);
+    setIsTyping(true);
+
+    const lower = text.toLowerCase();
+    const match = GURU_RESPONSES.find(r => r.trigger.some(t => lower.includes(t)));
+    const delay = 1200 + Math.random() * 800;
+
+    setTimeout(() => {
+      setIsTyping(false);
+      if (match) {
+        const docs = DOC_CONTENT[activeAsset.id];
+        const docMatch = docs.find(d => d.id === match.highlightDoc) || docs[0];
+        setActiveDoc(docMatch);
+        setHighlightSection(match.highlightSection);
+        setMessages(m => [...m, { role:'guru', text: match.text, time: new Date().toLocaleTimeString('es', {hour:'2-digit',minute:'2-digit'}), docs: [docMatch] }]);
+      } else {
+        setMessages(m => [...m, {
+          role:'guru',
+          text: `Analizando tu consulta sobre **${activeAsset.name}**.\n\nCon base en el historial disponible y los parámetros actuales de telemetría, no encuentro una coincidencia exacta en mi base de conocimiento local.\n\nTe recomiendo revisar los documentos adjuntos del activo o reformular la consulta con términos como: vibración, temperatura, arranque, mantenimiento preventivo.`,
+          time: new Date().toLocaleTimeString('es', {hour:'2-digit',minute:'2-digit'}),
+          docs: [],
+        }]);
+      }
+    }, delay);
+  }, [input, activeAsset]);
+
+  const handleVoice = () => {
+    setListening(l => !l);
+    if (!listening) {
+      setTimeout(() => { setListening(false); setInput('Diagnóstico de vibración en BOM-001'); }, 2000);
+    }
+  };
+
+  const t = telemetry;
+  const timeline = TIMELINE[activeAsset.id] || [];
+  const docs = DOC_CONTENT[activeAsset.id] || [];
+
+  const severityColor = { ok:'#00b894', info:'var(--blue)', warning:'#f59e0b', critical:'#ef4444' };
+  const typeIcon = { inspection:'search', alarm:'alert-triangle', repair:'wrench', pm:'calendar-check' };
+
+  return (
+    <div style={{ height:'100vh', display:'flex', flexDirection:'column', overflow:'hidden', background: tweaks.darkMode ? 'var(--bg-base)' : '#f0f4f8' }}>
+
+      {/* ── TOP HEADER ── */}
+      <header style={{
+        height:52, display:'flex', alignItems:'center', gap:16, padding:'0 16px',
+        background:'var(--bg-surface)', borderBottom:'1px solid var(--border)',
+        flexShrink:0, zIndex:10,
+      }}>
+        {/* Logo */}
+        <div style={{ display:'flex', alignItems:'center', gap:10, marginRight:8 }}>
+          <div style={{ width:30, height:30, borderRadius:6, background:'var(--teal)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+            <Icon name="cpu" size={16} color="#000" />
+          </div>
+          <div>
+            <div style={{ fontSize:14, fontWeight:700, letterSpacing:'0.05em', color:'var(--text-primary)', lineHeight:1 }}>GURU<span style={{ color:'var(--teal)' }}>MASTER</span></div>
+            <div style={{ fontSize:9, color:'var(--text-muted)', fontFamily:'var(--font-mono)', letterSpacing:'0.12em' }}>INDUSTRIAL AI PLATFORM</div>
+          </div>
+        </div>
+
+        {/* Asset selector */}
+        <div style={{ display:'flex', gap:6 }}>
+          {ASSETS.map(a => (
+            <button key={a.id} onClick={() => setActiveAsset(a)}
+              style={{
+                padding:'5px 10px', borderRadius:'var(--radius-sm)', border:`1px solid ${activeAsset.id === a.id ? 'var(--teal-dim)' : 'transparent'}`,
+                background: activeAsset.id === a.id ? 'var(--teal-subtle)' : 'transparent',
+                color: activeAsset.id === a.id ? 'var(--teal)' : 'var(--text-secondary)',
+                fontSize:11, fontFamily:'var(--font-mono)', cursor:'pointer',
+                transition:'all 0.2s',
+              }}>
+              {a.id}
+              {a.status === 'critical' && <span style={{ marginLeft:4, color:'#ef4444' }}>●</span>}
+              {a.status === 'warning' && <span style={{ marginLeft:4, color:'#f59e0b' }}>●</span>}
+            </button>
+          ))}
+        </div>
+
+        <div style={{ flex:1 }} />
+
+        {/* Cmd+K shortcut hint */}
+        <button onClick={() => setCmdOpen(true)}
+          style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 12px', background:'var(--bg-raised)', border:'1px solid var(--border)', borderRadius:'var(--radius-sm)', cursor:'pointer', color:'var(--text-muted)', fontSize:12 }}>
+          <Icon name="search" size={13} />
+          <span style={{ fontFamily:'var(--font-mono)' }}>Consultar Oráculo</span>
+          <span style={{ padding:'1px 5px', background:'var(--bg-hover)', border:'1px solid var(--border)', borderRadius:3, fontSize:10, fontFamily:'var(--font-mono)' }}>⌘K</span>
+        </button>
+
+        <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+          <StatusBadge status={activeAsset.status} />
+          <div style={{ width:1, height:20, background:'var(--border)' }} />
+          <div style={{ width:30, height:30, borderRadius:'50%', background:'linear-gradient(135deg, var(--teal-dim), #1a4a3c)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:12, fontWeight:600 }}>JM</div>
+        </div>
+      </header>
+
+      {/* ── MAIN CONTENT ── */}
+      <div style={{ flex:1, display:'flex', overflow:'hidden', gap:0 }}>
+
+        {/* ── LEFT: CHAT ── */}
+        <div style={{ flex:'0 0 42%', display:'flex', flexDirection:'column', borderRight:'1px solid var(--border)', overflow:'hidden' }}>
+
+          {/* Chat header */}
+          <div style={{ padding:'10px 16px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', gap:10, background:'var(--bg-surface)' }}>
+            <div style={{ width:8, height:8, borderRadius:'50%', background:'var(--teal)', boxShadow:'0 0 8px var(--teal)' }} />
+            <span style={{ fontSize:12, fontFamily:'var(--font-mono)', color:'var(--text-secondary)', letterSpacing:'0.06em' }}>ORÁCULO ACTIVO</span>
+            <span style={{ marginLeft:'auto', fontSize:11, color:'var(--text-muted)', fontFamily:'var(--font-mono)' }}>{activeAsset.name}</span>
+          </div>
+
+          {/* Messages */}
+          <div style={{ flex:1, overflowY:'auto', padding:'12px 16px', display:'flex', flexDirection:'column', gap:12 }}>
+            {messages.map((msg, i) => (
+              <div key={i} className="animate-in" style={{ display:'flex', flexDirection:'column', gap:4, alignItems: msg.role==='user' ? 'flex-end' : 'flex-start' }}>
+                {msg.role === 'guru' && (
+                  <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:2 }}>
+                    <div style={{ width:22, height:22, borderRadius:4, background:'var(--teal)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                      <Icon name="cpu" size={12} color="#000" />
+                    </div>
+                    <span style={{ fontSize:10, color:'var(--teal)', fontFamily:'var(--font-mono)', letterSpacing:'0.08em' }}>GURU·MASTER</span>
+                    <span style={{ fontSize:10, color:'var(--text-muted)', fontFamily:'var(--font-mono)' }}>{msg.time}</span>
+                  </div>
+                )}
+                <div style={{
+                  maxWidth:'90%', padding:'10px 14px',
+                  background: msg.role==='user' ? 'var(--teal-subtle)' : 'var(--bg-raised)',
+                  border: `1px solid ${msg.role==='user' ? 'var(--teal-dim)' : 'var(--border)'}`,
+                  borderRadius: msg.role==='user' ? '12px 12px 2px 12px' : '2px 12px 12px 12px',
+                }}>
+                  {msg.role === 'guru' ? <GuruText text={msg.text} /> :
+                    <p style={{ fontSize:13, color:'var(--text-primary)' }}>{msg.text}</p>}
+                </div>
+                {msg.role==='user' && <span style={{ fontSize:10, color:'var(--text-muted)', fontFamily:'var(--font-mono)' }}>{msg.time}</span>}
+              </div>
+            ))}
+
+            {isTyping && (
+              <div className="animate-in" style={{ display:'flex', alignItems:'center', gap:8 }}>
+                <div style={{ width:22, height:22, borderRadius:4, background:'var(--teal)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                  <Icon name="cpu" size={12} color="#000" />
+                </div>
+                <div style={{ padding:'10px 14px', background:'var(--bg-raised)', border:'1px solid var(--border)', borderRadius:'2px 12px 12px 12px', display:'flex', gap:5, alignItems:'center' }}>
+                  <div className="typing-dot" />
+                  <div className="typing-dot" />
+                  <div className="typing-dot" />
+                </div>
+              </div>
+            )}
+            <div ref={chatEndRef} />
+          </div>
+
+          {/* Input */}
+          <div style={{ padding:'12px 16px', borderTop:'1px solid var(--border)', background:'var(--bg-surface)', display:'flex', gap:8, alignItems:'flex-end' }}>
+            <div style={{ flex:1, position:'relative' }}>
+              <textarea
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={e => { if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
+                placeholder="Describe la falla o haz una consulta técnica... (Enter para enviar)"
+                rows={2}
+                style={{
+                  width:'100%', resize:'none', background:'var(--bg-raised)', border:'1px solid var(--border)',
+                  borderRadius:'var(--radius-md)', color:'var(--text-primary)', fontSize:13,
+                  fontFamily:'var(--font-sans)', padding:'10px 12px', outline:'none',
+                  transition:'border-color 0.2s',
+                  lineHeight:1.5,
+                }}
+                onFocus={e => e.target.style.borderColor = 'var(--teal-dim)'}
+                onBlur={e => e.target.style.borderColor = 'var(--border)'}
+              />
+            </div>
+            <div style={{ display:'flex', gap:6 }}>
+              <button onClick={handleVoice}
+                style={{
+                  width:38, height:38, borderRadius:'var(--radius-md)', border:`1px solid ${listening ? 'var(--teal)' : 'var(--border)'}`,
+                  background: listening ? 'var(--teal-subtle)' : 'var(--bg-raised)',
+                  cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center',
+                  color: listening ? 'var(--teal)' : 'var(--text-secondary)',
+                  animation: listening ? 'pulse-ring 1.5s ease-out infinite' : 'none',
+                }}>
+                <Icon name="mic" size={15} />
+              </button>
+              <button onClick={() => sendMessage()}
+                style={{
+                  width:38, height:38, borderRadius:'var(--radius-md)', border:'none',
+                  background: input.trim() ? 'var(--teal)' : 'var(--bg-raised)',
+                  cursor: input.trim() ? 'pointer' : 'default',
+                  display:'flex', alignItems:'center', justifyContent:'center',
+                  transition:'background 0.2s',
+                }}>
+                <Icon name="send" size={15} color={input.trim() ? '#000' : 'var(--text-muted)'} />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* ── CENTER: DOCUMENT VIEWER ── */}
+        <div style={{ flex:'0 0 35%', display:'flex', flexDirection:'column', borderRight:'1px solid var(--border)', overflow:'hidden' }}>
+
+          {/* Doc header */}
+          <div style={{ padding:'10px 14px', borderBottom:'1px solid var(--border)', background:'var(--bg-surface)', display:'flex', alignItems:'center', gap:10 }}>
+            <Icon name="file-text" size={14} color="var(--text-secondary)" />
+            <span style={{ fontSize:12, fontFamily:'var(--font-mono)', color:'var(--text-secondary)', letterSpacing:'0.06em' }}>VISOR DE DOCUMENTOS</span>
+          </div>
+
+          {/* Doc list */}
+          <div style={{ padding:'10px 14px', borderBottom:'1px solid var(--border)', display:'flex', gap:6, flexWrap:'wrap' }}>
+            {docs.map(d => (
+              <button key={d.id} onClick={() => { setActiveDoc(d); setHighlightSection(null); }}
+                style={{
+                  padding:'4px 10px', borderRadius:4, border:`1px solid ${activeDoc?.id===d.id ? 'var(--teal-dim)' : 'var(--border)'}`,
+                  background: activeDoc?.id===d.id ? 'var(--teal-subtle)' : 'transparent',
+                  color: activeDoc?.id===d.id ? 'var(--teal)' : 'var(--text-muted)',
+                  fontSize:10, fontFamily:'var(--font-mono)', cursor:'pointer',
+                  display:'flex', alignItems:'center', gap:5,
+                }}>
+                <Icon name={d.type==='pid' ? 'git-fork' : d.type==='procedure' ? 'list-checks' : 'book-open'} size={10} />
+                {d.type==='pid' ? 'P&ID' : d.type==='procedure' ? 'PROC' : 'MAN'}
+              </button>
+            ))}
+          </div>
+
+          {/* Document content */}
+          <div style={{ flex:1, overflowY:'auto', padding:'16px 20px', fontFamily:'var(--font-mono)' }}>
+            <div style={{ marginBottom:16 }}>
+              <div style={{ fontSize:13, color:'var(--text-primary)', fontWeight:600, marginBottom:4 }}>{activeDoc?.title}</div>
+              <div style={{ fontSize:10, color:'var(--text-muted)' }}>{activeDoc?.pages} páginas · Revisión: 2026-Q1</div>
+            </div>
+
+            {/* Highlighted section if any */}
+            {highlightSection && (
+              <div className="doc-highlight animate-in" style={{ padding:'12px 14px', marginBottom:16, borderRadius:6 }}>
+                <div style={{ fontSize:10, color:'var(--teal)', fontFamily:'var(--font-mono)', marginBottom:6, letterSpacing:'0.08em' }}>▶ REFERENCIADO POR EL ORÁCULO</div>
+                <div style={{ fontSize:12, color:'var(--text-primary)', fontWeight:600, marginBottom:8 }}>{highlightSection}</div>
+                <div style={{ fontSize:12, color:'var(--text-secondary)', lineHeight:1.7 }}>
+                  Este fragmento contiene la información técnica relevante para tu consulta. Las especificaciones de diagnóstico aquí descritas aplican al modelo y configuración actual del activo seleccionado.
+                </div>
+              </div>
+            )}
+
+            {/* Mock document body */}
+            {activeDoc?.type === 'pid' ? (
+              <div style={{ border:'1px solid var(--border)', borderRadius:8, overflow:'hidden' }}>
+                <div style={{ background:'var(--bg-raised)', padding:'12px', fontSize:10, color:'var(--text-muted)', textAlign:'center', marginBottom:0 }}>
+                  Diagrama P&ID — {activeAsset.name}
+                </div>
+                {/* SVG P&ID placeholder */}
+                <svg viewBox="0 0 400 260" style={{ width:'100%', background:'var(--bg-raised)' }}>
+                  {/* Grid lines */}
+                  {[0,1,2,3].map(i => <line key={`h${i}`} x1="0" y1={65*i+30} x2="400" y2={65*i+30} stroke="var(--border)" strokeWidth="0.5" />)}
+                  {[0,1,2,3,4,5].map(i => <line key={`v${i}`} x1={70*i+10} y1="0" x2={70*i+10} y2="260" stroke="var(--border)" strokeWidth="0.5" />)}
+
+                  {/* Vessel */}
+                  <rect x="160" y="80" width="80" height="100" rx="4" stroke="var(--text-muted)" strokeWidth="1.5" fill="none" />
+                  <text x="200" y="135" textAnchor="middle" fontSize="9" fill="var(--text-muted)" fontFamily="var(--font-mono)">V-101</text>
+
+                  {/* Pump */}
+                  <circle cx="80" cy="180" r="20" stroke="var(--teal)" strokeWidth="1.5" fill="none" />
+                  <text x="80" y="185" textAnchor="middle" fontSize="8" fill="var(--teal)" fontFamily="var(--font-mono)">P-001</text>
+
+                  {/* Heat exchanger */}
+                  <rect x="290" y="110" width="60" height="40" rx="2" stroke="var(--amber)" strokeWidth="1.5" fill="none" />
+                  <text x="320" y="135" textAnchor="middle" fontSize="8" fill="var(--amber)" fontFamily="var(--font-mono)">E-101</text>
+
+                  {/* Lines */}
+                  <path d="M 100 180 L 160 180 L 160 130" stroke="var(--text-muted)" strokeWidth="1.2" fill="none" />
+                  <path d="M 240 130 L 290 130" stroke="var(--text-muted)" strokeWidth="1.2" fill="none" />
+                  <path d="M 240 160 L 260 160 L 260 200 L 320 200 L 320 150" stroke="var(--text-muted)" strokeWidth="1.2" fill="none" />
+
+                  {/* Valves */}
+                  <polygon points="130,175 130,185 140,180" fill="none" stroke="var(--text-secondary)" strokeWidth="1" />
+                  <polygon points="140,175 140,185 130,180" fill="none" stroke="var(--text-secondary)" strokeWidth="1" />
+
+                  {/* Labels */}
+                  <text x="200" y="20" textAnchor="middle" fontSize="10" fill="var(--text-muted)" fontFamily="var(--font-mono)">P&ID — {activeAsset.id} — Rev. A3</text>
+                </svg>
+              </div>
+            ) : (
+              <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+                {['1. Descripción General del Equipo', '2. Especificaciones Técnicas', '3. Condiciones Operacionales', '4. Diagnóstico y Solución de Fallas', '5. Mantenimiento Preventivo', '6. Procedimientos de Seguridad'].map((section, i) => (
+                  <div key={i} style={{
+                    padding:'10px 12px', borderRadius:6,
+                    background: highlightSection && i === 3 ? 'var(--teal-subtle)' : 'var(--bg-raised)',
+                    border: `1px solid ${highlightSection && i === 3 ? 'var(--teal-dim)' : 'var(--border)'}`,
+                    cursor:'pointer', transition:'all 0.2s',
+                  }}>
+                    <div style={{ fontSize:12, color: highlightSection && i===3 ? 'var(--teal)' : 'var(--text-secondary)', fontWeight:500, display:'flex', alignItems:'center', gap:8 }}>
+                      {highlightSection && i===3 && <span style={{ color:'var(--teal)', fontSize:10 }}>▶</span>}
+                      {section}
+                    </div>
+                    {highlightSection && i===3 && (
+                      <div style={{ marginTop:8, fontSize:11, color:'var(--text-secondary)', lineHeight:1.65 }}>
+                        {highlightSection} — Ver referencia del Oráculo para contexto específico del activo actual.
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ── RIGHT: TELEMETRY + TIMELINE ── */}
+        <div style={{ flex:'0 0 23%', display:'flex', flexDirection:'column', overflow:'hidden' }}>
+
+          {/* Tab switcher */}
+          <div style={{ display:'flex', borderBottom:'1px solid var(--border)', background:'var(--bg-surface)' }}>
+            {[['telemetry','activity','TELEMETRÍA'], ['timeline','history','HISTORIAL']].map(([key, icon, label]) => (
+              <button key={key} onClick={() => setSidebarTab(key)}
+                style={{
+                  flex:1, padding:'11px 8px', border:'none', cursor:'pointer',
+                  background: sidebarTab===key ? 'var(--bg-raised)' : 'transparent',
+                  borderBottom: sidebarTab===key ? '2px solid var(--teal)' : '2px solid transparent',
+                  color: sidebarTab===key ? 'var(--teal)' : 'var(--text-muted)',
+                  fontSize:9, fontFamily:'var(--font-mono)', letterSpacing:'0.1em',
+                  display:'flex', alignItems:'center', justifyContent:'center', gap:5,
+                  transition:'all 0.2s',
+                }}>
+                <Icon name={icon} size={11} />
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {sidebarTab === 'telemetry' ? (
+            <div style={{ flex:1, overflowY:'auto', padding:'14px 12px', display:'flex', flexDirection:'column', gap:12 }}>
+
+              {/* Asset info */}
+              <div style={{ padding:'10px 12px', background:'var(--bg-raised)', border:'1px solid var(--border)', borderRadius:8 }}>
+                <div style={{ fontSize:10, color:'var(--text-muted)', fontFamily:'var(--font-mono)', marginBottom:4 }}>{activeAsset.location}</div>
+                <div style={{ fontSize:12, color:'var(--text-primary)', fontWeight:600, marginBottom:8 }}>{activeAsset.id}</div>
+                <StatusBadge status={activeAsset.status} />
+              </div>
+
+              {/* Gauges */}
+              <div style={{ padding:'12px', background:'var(--bg-raised)', border:'1px solid var(--border)', borderRadius:8 }}>
+                <div style={{ fontSize:9, color:'var(--text-muted)', fontFamily:'var(--font-mono)', letterSpacing:'0.1em', marginBottom:10 }}>
+                  ● TIEMPO REAL
+                </div>
+                <div style={{ display:'flex', justifyContent:'space-around', flexWrap:'wrap', gap:8 }}>
+                  <Gauge value={Math.round(t.temp)} max={t.tempMax} label="TEMP" unit="°C" warn={90} crit={110} />
+                  <Gauge value={+t.pressure.toFixed(1)} max={t.pressureMax} label="PRESIÓN" unit="bar" warn={6.5} crit={7.5} />
+                  <Gauge value={+t.vibration.toFixed(1)} max={t.vibrationMax} label="VIBR" unit="mm/s" warn={7.5} crit={10} />
+                </div>
+              </div>
+
+              {/* Trend bars */}
+              {[
+                { label:'Temperatura', value: t.temp, max: t.tempMax, unit:'°C', warn:90, crit:110 },
+                { label:'Presión', value: t.pressure, max: t.pressureMax, unit:'bar', warn:6.5, crit:7.5 },
+                { label:'Vibración', value: t.vibration, max: t.vibrationMax, unit:'mm/s', warn:7.5, crit:10 },
+              ].map(({ label, value, max, unit, warn, crit }) => {
+                const pct = Math.min(value / max * 100, 100);
+                const color = value >= crit ? '#ef4444' : value >= warn ? '#f59e0b' : '#00b894';
+                return (
+                  <div key={label} style={{ padding:'10px 12px', background:'var(--bg-raised)', border:'1px solid var(--border)', borderRadius:8 }}>
+                    <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6 }}>
+                      <span style={{ fontSize:10, color:'var(--text-secondary)', fontFamily:'var(--font-mono)' }}>{label}</span>
+                      <span style={{ fontSize:11, color, fontFamily:'var(--font-mono)', fontWeight:600 }}>{typeof value === 'number' ? value.toFixed(1) : value} {unit}</span>
+                    </div>
+                    <div style={{ height:4, background:'var(--border)', borderRadius:2, overflow:'hidden' }}>
+                      <div style={{ height:'100%', width:`${pct}%`, background:color, borderRadius:2, transition:'width 1s ease, background 0.5s' }} />
+                    </div>
+                    <div style={{ display:'flex', justifyContent:'space-between', marginTop:4 }}>
+                      <span style={{ fontSize:9, color:'var(--text-muted)', fontFamily:'var(--font-mono)' }}>0</span>
+                      <span style={{ fontSize:9, color:'var(--text-muted)', fontFamily:'var(--font-mono)' }}>{max} {unit}</span>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Quick actions */}
+              <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                {['Diagnóstico rápido', 'Exportar reporte', 'Crear orden de trabajo'].map((label, i) => (
+                  <button key={i} onClick={() => { if(i===0) sendMessage(`Diagnóstico completo para ${activeAsset.id}`); }}
+                    style={{
+                      padding:'8px 12px', background:'var(--bg-raised)', border:'1px solid var(--border)',
+                      borderRadius:6, color:'var(--text-secondary)', fontSize:11, fontFamily:'var(--font-mono)',
+                      cursor:'pointer', textAlign:'left', display:'flex', alignItems:'center', gap:8,
+                      transition:'all 0.2s',
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor='var(--teal-dim)'; e.currentTarget.style.color='var(--teal)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor='var(--border)'; e.currentTarget.style.color='var(--text-secondary)'; }}>
+                    <Icon name={['zap','download','plus-circle'][i]} size={12} />
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            /* TIMELINE */
+            <div style={{ flex:1, overflowY:'auto', padding:'14px 12px', display:'flex', flexDirection:'column', gap:0 }}>
+              <div style={{ fontSize:9, color:'var(--text-muted)', fontFamily:'var(--font-mono)', letterSpacing:'0.1em', marginBottom:12 }}>
+                HISTORIAL DE VIDA — {activeAsset.id} ({timeline.length} EVENTOS)
+              </div>
+              <div style={{ position:'relative', paddingLeft:20 }}>
+                <div style={{ position:'absolute', left:7, top:0, bottom:0, width:1, background:'var(--border)' }} />
+                {timeline.map((evt, i) => (
+                  <div key={i} className="animate-in" style={{ marginBottom:16, position:'relative' }}>
+                    <div style={{
+                      position:'absolute', left:-13, top:3, width:8, height:8, borderRadius:'50%',
+                      background: severityColor[evt.severity] || 'var(--text-muted)',
+                      boxShadow: `0 0 6px ${severityColor[evt.severity]}`,
+                    }} />
+                    <div style={{ padding:'10px 12px', background:'var(--bg-raised)', border:`1px solid ${evt.severity==='critical' ? 'rgba(239,68,68,0.3)' : 'var(--border)'}`, borderRadius:8 }}>
+                      <div style={{ fontSize:9, color:'var(--text-muted)', fontFamily:'var(--font-mono)', marginBottom:4 }}>{evt.date} · {evt.tech}</div>
+                      <div style={{ fontSize:12, color:'var(--text-primary)', fontWeight:500, marginBottom:4 }}>{evt.title}</div>
+                      <div style={{ fontSize:11, color:'var(--text-secondary)', lineHeight:1.5 }}>{evt.note}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── COMMAND PALETTE ── */}
+      {cmdOpen && (
+        <div className="cmd-overlay" onClick={e => { if(e.target===e.currentTarget) setCmdOpen(false); }}>
+          <div className="cmd-box animate-in">
+            <div style={{ display:'flex', alignItems:'center', gap:12, padding:'14px 16px', borderBottom:'1px solid var(--border)' }}>
+              <Icon name="search" size={16} color="var(--teal)" />
+              <input
+                ref={cmdRef}
+                value={cmdQuery}
+                onChange={e => setCmdQuery(e.target.value)}
+                onKeyDown={e => { if(e.key==='Enter') { sendMessage(cmdQuery); setCmdQuery(''); } if(e.key==='Escape') setCmdOpen(false); }}
+                placeholder="Consulta al Oráculo... pregunta cualquier cosa sobre el activo"
+                style={{ flex:1, background:'transparent', border:'none', outline:'none', color:'var(--text-primary)', fontSize:15, fontFamily:'var(--font-sans)' }}
+              />
+              <kbd style={{ padding:'2px 8px', background:'var(--bg-hover)', border:'1px solid var(--border)', borderRadius:4, fontSize:11, color:'var(--text-muted)', fontFamily:'var(--font-mono)' }}>ESC</kbd>
+            </div>
+            <div style={{ padding:'8px' }}>
+              {['¿Cuál es la causa probable de la vibración?', 'Procedimiento de arranque seguro', 'Estado del mantenimiento preventivo', `Diagnóstico de temperatura para ${activeAsset.id}`].map((s, i) => (
+                <button key={i} onClick={() => { sendMessage(s); setCmdQuery(''); }}
+                  style={{
+                    width:'100%', padding:'10px 14px', background:'transparent', border:'none', borderRadius:6,
+                    color:'var(--text-secondary)', fontSize:13, textAlign:'left', cursor:'pointer', display:'flex',
+                    alignItems:'center', gap:10, transition:'background 0.15s',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background='var(--bg-hover)'}
+                  onMouseLeave={e => e.currentTarget.style.background='transparent'}>
+                  <Icon name="message-circle" size={13} color="var(--text-muted)" />
+                  {s}
+                </button>
+              ))}
+            </div>
+            <div style={{ padding:'10px 16px', borderTop:'1px solid var(--border)', display:'flex', gap:16 }}>
+              {[['Enter','Consultar'],['↑↓','Navegar'],['Esc','Cerrar']].map(([key, label]) => (
+                <div key={key} style={{ display:'flex', gap:5, alignItems:'center' }}>
+                  <kbd style={{ padding:'1px 6px', background:'var(--bg-hover)', border:'1px solid var(--border)', borderRadius:3, fontSize:10, color:'var(--text-muted)', fontFamily:'var(--font-mono)' }}>{key}</kbd>
+                  <span style={{ fontSize:10, color:'var(--text-muted)', fontFamily:'var(--font-mono)' }}>{label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── TWEAKS ── */}
+      <TweaksPanel>
+        <TweakSection label="Apariencia" />
+        <TweakToggle label="Modo Oscuro" value={tweaks.darkMode} onChange={v => setTweak('darkMode', v)} />
+        <TweakColor label="Color Acento" value={tweaks.accentColor} onChange={v => setTweak('accentColor', v)} />
+        <TweakSlider label="Tamaño de Texto" value={tweaks.fontSize} min={11} max={16} step={1} unit="px" onChange={v => setTweak('fontSize', v)} />
+        <TweakSection label="Layout" />
+        <TweakToggle label="Layout Compacto" value={tweaks.compactLayout} onChange={v => setTweak('compactLayout', v)} />
+        <TweakToggle label="Mostrar Historial" value={tweaks.showTimeline} onChange={v => setTweak('showTimeline', v)} />
+      </TweaksPanel>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
