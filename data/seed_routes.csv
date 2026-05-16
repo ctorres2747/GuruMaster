@@ -1,0 +1,7 @@
+﻿ruta_id,ciudad_origen,ciudad_destino,departamento_origen,departamento_destino,distancia_km,duracion_estimada_horas,tipo_ruta,estado
+R001,Medellin,Bogota,Antioquia,Cundinamarca,415,9.5,Nacional,Activa
+R002,Medellin,Barranquilla,Antioquia,Atlantico,705,14.0,Nacional,Activa
+R003,Bogota,Cali,Cundinamarca,Valle del Cauca,460,10.0,Nacional,Activa
+R004,Cali,Buenaventura,Valle del Cauca,Valle del Cauca,120,4.0,Regional,Activa
+R005,Medellin,Cartagena,Antioquia,Bolivar,650,13.0,Nacional,Activa
+R006,Bogota,Barranquilla,Cundinamarca,Atlantico,1000,19.0,Nacional,Activa

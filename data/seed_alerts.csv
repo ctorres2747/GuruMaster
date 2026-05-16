@@ -1,0 +1,13 @@
+﻿alerta_id,vehiculo_id,fecha_alerta,tipo_alerta,nivel_alerta,descripcion,fecha_limite,estado
+AL001,V001,2026-05-10,Llantas por cambio,Media,Dos llantas traseras estan proximas a cambio,2026-06-15,Abierta
+AL002,V001,2026-05-12,Mantenimiento proximo,Baja,Proximo mantenimiento preventivo por kilometraje,2026-08-12,Abierta
+AL003,V002,2026-05-15,Documento por vencer,Alta,SOAT vence el 2026-06-05,2026-06-05,Abierta
+AL004,V002,2026-05-15,Documento por vencer,Media,Poliza de responsabilidad civil vence el 2026-05-25,2026-05-25,Abierta
+AL005,V003,2026-05-01,Documento vencido,Critica,SOAT vencido desde el 2026-03-30,2026-03-30,Abierta
+AL006,V003,2026-05-20,Llantas por cambio,Critica,Llanta trasera interna derecha requiere cambio inmediato,2026-05-25,Abierta
+AL007,V003,2026-05-20,Mantenimiento proximo,Media,Mantenimiento preventivo programado,2026-08-20,Programada
+AL008,V004,2026-05-10,Documento por vencer,Alta,Revision tecnomecanica vence el 2026-05-20,2026-05-20,Abierta
+AL009,V004,2026-05-12,Kilometraje alto,Baja,"Vehiculo supero 107000 km, revisar plan preventivo",2026-06-12,Abierta
+AL010,V005,2026-05-01,Documento vencido,Critica,Revision tecnomecanica vencida desde el 2026-04-15,2026-04-15,Abierta
+AL011,V005,2026-05-10,Mantenimiento vencido,Critica,Vehiculo en mantenimiento por reparacion de transmision,2026-05-30,En gestion
+AL012,V005,2026-05-18,Activo inactivo,Alta,Vehiculo no disponible para operacion comercial,2026-05-30,Abierta

@@ -1,0 +1,12 @@
+﻿mantenimiento_id,vehiculo_id,fecha_mantenimiento,tipo_mantenimiento,categoria_mantenimiento,kilometraje,proveedor,valor,moneda,descripcion,proximo_mantenimiento_km,proximo_mantenimiento_fecha,estado
+MT001,V001,2026-01-15,Preventivo,Cambio de aceite,450000,Taller Diesel Medellin,850000,COP,"Cambio de aceite, filtros y revision general",465000,2026-04-15,Completado
+MT002,V001,2026-04-18,Correctivo,Frenos,466200,Frenos Antioquia,1250000,COP,Cambio de bandas y calibracion de sistema de frenos,481200,2026-07-18,Completado
+MT003,V001,2026-05-12,Inspeccion,Suspension,472500,Taller Diesel Medellin,180000,COP,Revision de suspension por ruido en ruta,487500,2026-08-12,Completado
+MT004,V002,2026-02-10,Preventivo,Cambio de aceite,180000,Hino Service Bogota,520000,COP,Mantenimiento preventivo de 10.000 km,190000,2026-05-10,Completado
+MT005,V002,2026-05-08,Preventivo,Revision general,191000,Hino Service Bogota,610000,COP,Revision general y cambio de filtros,201000,2026-08-08,Completado
+MT006,V003,2026-03-05,Correctivo,Motor,310000,Taller Pesados Cali,2300000,COP,Reparacion fuga de aceite y ajuste menor de motor,325000,2026-06-05,Completado
+MT007,V003,2026-05-20,Preventivo,Revision general,326000,Taller Pesados Cali,750000,COP,Mantenimiento preventivo programado,341000,2026-08-20,Programado
+MT008,V004,2026-01-25,Preventivo,Cambio de aceite,95000,NPR Service Medellin,390000,COP,Cambio de aceite y filtros,105000,2026-04-25,Completado
+MT009,V004,2026-04-28,Correctivo,Sistema electrico,106500,Electro Diesel Medellin,480000,COP,Reparacion de alternador,116500,2026-07-28,Completado
+MT010,V005,2026-04-20,Correctivo,Transmision,520000,Taller Pesados Cartagena,4800000,COP,Reparacion de caja de cambios,535000,2026-07-20,En proceso
+MT011,V005,2026-05-10,Correctivo,Llantas,521500,Llantas Caribe,1400000,COP,Cambio de dos llantas traseras,536500,2026-08-10,Completado

@@ -1,0 +1,26 @@
+﻿peaje_id,ruta_id,nombre_peaje,ubicacion,categoria_vehiculo,valor,moneda
+P001,R001,Peaje Primavera,Antioquia,Categoria V,65000,COP
+P002,R001,Peaje Cocorna,Antioquia,Categoria V,72000,COP
+P003,R001,Peaje Siberia,Cundinamarca,Categoria V,80000,COP
+P004,R001,Peaje Primavera,Antioquia,Categoria III,42000,COP
+P005,R001,Peaje Cocorna,Antioquia,Categoria III,46000,COP
+P006,R001,Peaje Siberia,Cundinamarca,Categoria III,52000,COP
+P007,R002,Peaje Los Llanos,Antioquia,Categoria V,68000,COP
+P008,R002,Peaje Taraza,Antioquia,Categoria V,76000,COP
+P009,R002,Peaje La Apartada,Cordoba,Categoria V,83000,COP
+P010,R002,Peaje Ponedera,Atlantico,Categoria V,91000,COP
+P011,R003,Peaje Chusaca,Cundinamarca,Categoria III,50000,COP
+P012,R003,Peaje Chinauta,Cundinamarca,Categoria III,48000,COP
+P013,R003,Peaje La Uribe,Valle del Cauca,Categoria III,52000,COP
+P014,R003,Peaje Chusaca,Cundinamarca,Categoria V,78000,COP
+P015,R003,Peaje Chinauta,Cundinamarca,Categoria V,76000,COP
+P016,R003,Peaje La Uribe,Valle del Cauca,Categoria V,82000,COP
+P017,R004,Peaje Loboguerrero,Valle del Cauca,Categoria III,60000,COP
+P018,R004,Peaje Mediacanoa,Valle del Cauca,Categoria III,54000,COP
+P019,R005,Peaje Taraza,Antioquia,Categoria V,76000,COP
+P020,R005,Peaje Sincelejo,Sucre,Categoria V,84000,COP
+P021,R005,Peaje Turbaco,Bolivar,Categoria V,88000,COP
+P022,R006,Peaje Siberia,Cundinamarca,Categoria V,80000,COP
+P023,R006,Peaje Puerto Salgar,Cundinamarca,Categoria V,86000,COP
+P024,R006,Peaje Bosconia,Cesar,Categoria V,91000,COP
+P025,R006,Peaje Ponedera,Atlantico,Categoria V,91000,COP

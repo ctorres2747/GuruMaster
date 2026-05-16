@@ -1,0 +1,9 @@
+﻿precio_combustible_id,fecha_precio,ciudad,departamento,tipo_combustible,precio_por_galon,moneda,fuente
+PC001,2026-05-01,Medellin,Antioquia,Diesel,9800,COP,Simulado
+PC002,2026-05-01,Bogota,Cundinamarca,Diesel,10100,COP,Simulado
+PC003,2026-05-01,Cali,Valle del Cauca,Diesel,9950,COP,Simulado
+PC004,2026-05-01,Barranquilla,Atlantico,Diesel,9700,COP,Simulado
+PC005,2026-05-01,Cartagena,Bolivar,Diesel,9750,COP,Simulado
+PC006,2026-05-15,Medellin,Antioquia,Diesel,9900,COP,Simulado
+PC007,2026-05-15,Bogota,Cundinamarca,Diesel,10200,COP,Simulado
+PC008,2026-05-15,Cali,Valle del Cauca,Diesel,10050,COP,Simulado

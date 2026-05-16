@@ -1,0 +1,76 @@
+ABC SICE-TAC — Sistema de Información de Costos Eficientes para el Transporte Automotor de Carga
+Fuente: Portal Logístico de Colombia — plc.mintransporte.gov.co
+
+¿Qué es SICE-TAC?
+
+El SICE-TAC es el sistema de información de costos eficientes para el transporte automotor de carga en Colombia. Incluye todos los costos operativos en que incurre un transportador para desplazar su vehículo desde un origen hasta un destino.
+
+El sistema calcula los costos a partir de los siguientes parámetros:
+- Tipo de vehículo
+- Condición de carga
+- Tipo de carrocería
+- Clasificación de la carga
+- Origen y destino del viaje
+- Horas logísticas (cargue, descargue, espera)
+
+El Ministerio de Transporte actualiza el SICE-TAC considerando: valor del vehículo, salarios, seguros, impuestos vehiculares, costos de mantenimiento, precios de combustible, peajes y repuestos.
+
+Función principal
+
+El sistema establece el costo eficiente de operación de obligatorio cumplimiento y sirve como base de negociación para todos los participantes de la cadena de transporte. Su objetivo es fomentar un mercado transparente y equidad en las relaciones comerciales del sector.
+
+Condiciones operativas
+
+El SICE-TAC refleja los costos eficientes de operación basados en la capacidad máxima estimada de carga para cada tipo y configuración de vehículo. Cualquier modificación en los elementos de la estructura de costos produce efectos inmediatos en los costos del viaje, dependiendo de la ruta, el tipo de vehículo y la clasificación de la carga.
+
+---
+
+PREGUNTAS FRECUENTES SICE-TAC
+
+1. ¿Qué es SICE-TAC?
+Una herramienta del Ministerio de Transporte que calcula costos eficientes para el transporte automotor de carga, considerando variables técnicas, operativas y financieras.
+
+2. ¿Es obligatorio cumplir SICE-TAC?
+Sí. Según la normativa vigente, los Costos Eficientes de Operación contenidos en el SICE-TAC son de obligatorio cumplimiento para todos los actores de la cadena de transporte.
+
+3. ¿A quién aplica?
+A generadores de carga, empresas de transporte habilitadas y propietarios/tenedores de vehículos del servicio público de transporte terrestre automotor de carga.
+
+4. Tipologías incluidas
+- Carga pesada (PBV superior a 10,5 toneladas)
+- Carga liviana (7.500-10.500 kg)
+- Volquetas
+- Tipos de carga: general, refrigerada, contenerizada, granel sólido y líquido
+
+5. Vehículo de referencia
+El cálculo usa vehículos tipo según parque automotor RUNT, tomando marcas y modelos más representativos del mercado (ej: International, Kenworth, Chevrolet).
+
+6. Base del cálculo
+Se calcula según capacidad máxima de carga (PBV), sin importar las toneladas efectivamente transportadas.
+
+7. Viajes Round Trip
+Se calculan por separado para cada trayecto origen-destino considerando las condiciones específicas de cada sentido.
+
+8. Viaje en vacío
+Su inclusión es opcional, dependiendo de lo pactado en el contrato de transporte.
+
+9. Contenedor vacío vs. Viaje vacío
+Contenedor vacío es un tipo de carga; viaje vacío es desplazamiento sin carga.
+
+10. Rutas no parametrizadas
+Se usa la ruta más cercana disponible y se multiplica su costo tonelada/km por los kilómetros de la ruta deseada.
+
+11. Incumplimiento del costo mínimo
+Las empresas no pueden expedir manifiestos con valores inferiores al SICE-TAC; constituiría incumplimiento normativo.
+
+12. Cargue y descargue
+No están incluidos en los costos eficientes. El generador de carga debe asumirlos.
+
+13. Descuentos autorizados
+Solo: retención en la fuente por renta e ICA. Otros descuentos no son legales.
+
+14. Horas logísticas
+Se incluyen 4 horas mínimas (8 para carga pesada en rutas largas). Horas adicionales se pagan según tarifa del sistema.
+
+15. Transporte urbano
+No está parametrizado. SICE-TAC opera solo para transporte intermunicipal y nacional.

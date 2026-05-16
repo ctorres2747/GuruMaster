@@ -1,0 +1,33 @@
+﻿gasto_id,viaje_id,fecha_gasto,tipo_gasto,valor,moneda,metodo_pago,proveedor,descripcion
+G001,T001,2026-05-01,Combustible,1250000,COP,Tarjeta,Terpel,Combustible ruta Medellin-Bogota
+G002,T001,2026-05-01,Peajes,520000,COP,Efectivo,Peajes Colombia,Peajes ruta Medellin-Bogota
+G003,T001,2026-05-01,Pago conductor,600000,COP,Transferencia,Conductor,Pago conductor viaje Medellin-Bogota
+G004,T001,2026-05-01,Cargue y descargue,180000,COP,Efectivo,Operador logistico,Servicio de cargue y descargue
+G005,T001,2026-05-02,Parqueadero,70000,COP,Efectivo,Parqueadero Bogota,Parqueadero nocturno
+G006,T002,2026-05-03,Combustible,2100000,COP,Tarjeta,Primax,Combustible ruta Medellin-Barranquilla
+G007,T002,2026-05-03,Peajes,780000,COP,Efectivo,Peajes Colombia,Peajes ruta Medellin-Barranquilla
+G008,T002,2026-05-03,Pago conductor,900000,COP,Transferencia,Conductor,Pago conductor viaje Medellin-Barranquilla
+G009,T002,2026-05-04,Mantenimiento,350000,COP,Transferencia,Taller Norte,Ajuste menor antes de llegada
+G010,T002,2026-05-04,Alimentacion,120000,COP,Efectivo,Restaurante ruta,Viaticos conductor
+G011,T003,2026-05-05,Combustible,820000,COP,Tarjeta,Terpel,Combustible ruta Bogota-Cali
+G012,T003,2026-05-05,Peajes,430000,COP,Efectivo,Peajes Colombia,Peajes ruta Bogota-Cali
+G013,T003,2026-05-05,Pago conductor,420000,COP,Transferencia,Conductor,Pago conductor viaje Bogota-Cali
+G014,T003,2026-05-05,Parqueadero,50000,COP,Efectivo,Parqueadero Cali,Parqueadero destino
+G015,T004,2026-05-07,Combustible,280000,COP,Tarjeta,Primax,Combustible ruta Cali-Buenaventura
+G016,T004,2026-05-07,Peajes,160000,COP,Efectivo,Peajes Colombia,Peajes ruta Cali-Buenaventura
+G017,T004,2026-05-07,Pago conductor,300000,COP,Transferencia,Conductor,Pago conductor viaje Cali-Buenaventura
+G018,T004,2026-05-07,Cargue y descargue,220000,COP,Efectivo,Operador portuario,Descargue en zona portuaria
+G019,T005,2026-05-10,Combustible,1950000,COP,Tarjeta,Terpel,Combustible ruta Medellin-Cartagena
+G020,T005,2026-05-10,Peajes,710000,COP,Efectivo,Peajes Colombia,Peajes ruta Medellin-Cartagena
+G021,T005,2026-05-10,Pago conductor,850000,COP,Transferencia,Conductor,Pago conductor viaje Medellin-Cartagena
+G022,T005,2026-05-11,Llantas,450000,COP,Transferencia,Llantas Caribe,Reparacion de llanta en ruta
+G023,T006,2026-05-12,Combustible,520000,COP,Tarjeta,Terpel,Combustible ruta Medellin-Bogota
+G024,T006,2026-05-12,Peajes,260000,COP,Efectivo,Peajes Colombia,Peajes ruta Medellin-Bogota categoria menor
+G025,T006,2026-05-12,Pago conductor,350000,COP,Transferencia,Conductor,Pago conductor viaje Medellin-Bogota
+G026,T006,2026-05-12,Seguro,90000,COP,Transferencia,Aseguradora Demo,Costo proporcional seguro viaje
+G027,T007,2026-05-15,Combustible,930000,COP,Tarjeta,Primax,Combustible ruta Bogota-Cali
+G028,T007,2026-05-15,Peajes,460000,COP,Efectivo,Peajes Colombia,Peajes ruta Bogota-Cali
+G029,T007,2026-05-15,Pago conductor,500000,COP,Transferencia,Conductor,Pago conductor viaje Bogota-Cali
+G030,T008,2026-05-18,Combustible,2950000,COP,Tarjeta,Terpel,Combustible ruta Bogota-Barranquilla
+G031,T008,2026-05-18,Peajes,950000,COP,Efectivo,Peajes Colombia,Peajes ruta Bogota-Barranquilla
+G032,T008,2026-05-18,Pago conductor,1100000,COP,Transferencia,Conductor,Pago conductor viaje Bogota-Barranquilla

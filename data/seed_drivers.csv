@@ -1,0 +1,6 @@
+﻿conductor_id,nombre_conductor,numero_documento,categoria_licencia,telefono,tipo_vinculacion,ciudad_base,estado
+D001,Carlos Perez,1001234567,C3,3001234567,Empleado,Medellin,Activo
+D002,Andres Gomez,1007654321,C2,3019876543,Contratista,Bogota,Activo
+D003,Luis Ramirez,1012345678,C3,3025551122,Empleado,Cali,Activo
+D004,Jorge Salazar,1023456789,C2,3104447788,Empleado,Barranquilla,Activo
+D005,Miguel Herrera,1034567890,C3,3112223344,Contratista,Medellin,Inactivo

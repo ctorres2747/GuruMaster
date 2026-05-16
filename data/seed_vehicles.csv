@@ -1,0 +1,6 @@
+﻿vehiculo_id,placa,tipo_vehiculo,marca,modelo,anio,capacidad_toneladas,tipo_combustible,rendimiento_km_por_galon,tipo_propiedad,estado
+V001,ABC123,Tractocamion,Kenworth,T800,2018,35,Diesel,7.5,Propio,Activo
+V002,DEF456,Camion sencillo,Hino,FC9J,2020,10,Diesel,13.0,Propio,Activo
+V003,GHI789,Doble troque,Chevrolet,FVR,2019,18,Diesel,10.5,Tercero,Activo
+V004,JKL321,Turbo,NPR,Reward,2021,5,Diesel,16.0,Propio,Activo
+V005,MNO654,Tractocamion,Freightliner,Cascadia,2017,36,Diesel,7.0,Propio,Mantenimiento

@@ -1,0 +1,16 @@
+﻿documento_id,vehiculo_id,tipo_documento,numero_documento,fecha_emision,fecha_vencimiento,entidad_emisora,estado,archivo_referencia,observaciones
+DOC001,V001,SOAT,SOAT-ABC123-2026,2025-08-15,2026-08-15,Aseguradora Andina,Vigente,soat_abc123.pdf,Documento vigente
+DOC002,V001,Revision tecnomecanica,RTM-ABC123-2026,2025-09-10,2026-09-10,CDA Medellin Norte,Vigente,rtm_abc123.pdf,Sin observaciones
+DOC003,V001,Tarjeta de propiedad,TP-ABC123,2018-03-20,,Transito Medellin,Vigente,tarjeta_abc123.pdf,Documento permanente
+DOC004,V002,SOAT,SOAT-DEF456-2026,2025-06-05,2026-06-05,Seguros Colombia,Por vencer,soat_def456.pdf,Vence en menos de 30 dias
+DOC005,V002,Revision tecnomecanica,RTM-DEF456-2026,2025-11-22,2026-11-22,CDA Bogota Occidente,Vigente,rtm_def456.pdf,Documento vigente
+DOC006,V002,Poliza responsabilidad civil,PRC-DEF456-2026,2025-05-25,2026-05-25,Aseguradora Nacional,Por vencer,poliza_def456.pdf,Revisar renovacion
+DOC007,V003,SOAT,SOAT-GHI789-2026,2025-03-30,2026-03-30,Aseguradora Andina,Vencido,soat_ghi789.pdf,Debe renovarse antes de operar
+DOC008,V003,Revision tecnomecanica,RTM-GHI789-2026,2025-07-18,2026-07-18,CDA Cali Sur,Vigente,rtm_ghi789.pdf,Documento vigente
+DOC009,V003,Contrato de vinculacion,CV-GHI789-2026,2026-01-01,2026-12-31,Empresa Transportadora Demo,Vigente,contrato_ghi789.pdf,Vehiculo tercero vinculado
+DOC010,V004,SOAT,SOAT-JKL321-2026,2025-10-01,2026-10-01,Seguros Colombia,Vigente,soat_jkl321.pdf,Documento vigente
+DOC011,V004,Revision tecnomecanica,RTM-JKL321-2026,2025-05-20,2026-05-20,CDA Medellin Sur,Por vencer,rtm_jkl321.pdf,Programar renovacion
+DOC012,V004,Tarjeta de propiedad,TP-JKL321,2021-02-10,,Transito Medellin,Vigente,tarjeta_jkl321.pdf,Documento permanente
+DOC013,V005,SOAT,SOAT-MNO654-2026,2025-12-12,2026-12-12,Aseguradora Nacional,Vigente,soat_mno654.pdf,Documento vigente
+DOC014,V005,Revision tecnomecanica,RTM-MNO654-2026,2025-04-15,2026-04-15,CDA Cartagena,Vencido,rtm_mno654.pdf,"Vehiculo en mantenimiento, no operar"
+DOC015,V005,Poliza responsabilidad civil,PRC-MNO654-2026,2025-07-01,2026-07-01,Aseguradora Andina,Vigente,poliza_mno654.pdf,Documento vigente

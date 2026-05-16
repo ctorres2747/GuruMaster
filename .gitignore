@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.env
+db/gurumaster_carga.sqlite
+db/chroma/
+.venv/
+venv/
+node_modules/
+*.egg-info/
+.DS_Store

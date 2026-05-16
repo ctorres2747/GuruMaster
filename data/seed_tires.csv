@@ -1,0 +1,17 @@
+﻿llanta_id,vehiculo_id,posicion_llanta,marca,referencia,fecha_instalacion,kilometraje_instalacion,kilometraje_actual,estado,valor_compra,moneda,observaciones
+LL001,V001,Delantera izquierda,Michelin,X Multi Z,2025-11-10,440000,472800,Buen estado,1800000,COP,Desgaste normal
+LL002,V001,Delantera derecha,Michelin,X Multi Z,2025-11-10,440000,472800,Buen estado,1800000,COP,Desgaste normal
+LL003,V001,Trasera interna izquierda,Goodyear,KMAX D,2025-07-15,420000,472800,Proxima a cambio,1500000,COP,Revisar profundidad de labrado
+LL004,V001,Trasera externa izquierda,Goodyear,KMAX D,2025-07-15,420000,472800,Proxima a cambio,1500000,COP,Revisar profundidad de labrado
+LL005,V002,Delantera izquierda,Bridgestone,R249,2026-01-20,175000,191200,Buen estado,950000,COP,Desgaste bajo
+LL006,V002,Delantera derecha,Bridgestone,R249,2026-01-20,175000,191200,Buen estado,950000,COP,Desgaste bajo
+LL007,V002,Trasera izquierda,Hankook,AH31,2025-09-12,160000,191200,Buen estado,880000,COP,Sin observaciones
+LL008,V002,Trasera derecha,Hankook,AH31,2025-09-12,160000,191200,Buen estado,880000,COP,Sin observaciones
+LL009,V003,Delantera izquierda,Pirelli,FR85,2025-08-01,300000,327100,Buen estado,1200000,COP,Desgaste normal
+LL010,V003,Delantera derecha,Pirelli,FR85,2025-08-01,300000,327100,Buen estado,1200000,COP,Desgaste normal
+LL011,V003,Trasera interna derecha,Goodyear,KMAX D,2025-02-10,285000,327100,Critica,1400000,COP,Cambio recomendado inmediato
+LL012,V003,Trasera externa derecha,Goodyear,KMAX D,2025-02-10,285000,327100,Proxima a cambio,1400000,COP,Revisar antes de siguiente ruta
+LL013,V004,Delantera izquierda,Hankook,AH11,2026-02-05,100000,107450,Buen estado,650000,COP,Desgaste bajo
+LL014,V004,Delantera derecha,Hankook,AH11,2026-02-05,100000,107450,Buen estado,650000,COP,Desgaste bajo
+LL015,V005,Delantera izquierda,Michelin,X Line Energy,2025-06-18,500000,521900,Buen estado,1900000,COP,Vehiculo en mantenimiento
+LL016,V005,Trasera externa izquierda,Michelin,X Line Energy,2026-05-10,521500,521900,Nueva,1900000,COP,Instalada durante mantenimiento

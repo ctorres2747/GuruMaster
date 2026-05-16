@@ -1,0 +1,9 @@
+﻿viaje_id,fecha_viaje,vehiculo_id,conductor_id,ruta_id,nombre_cliente,tipo_carga,peso_carga_toneladas,ingreso,moneda,estado_viaje
+T001,2026-05-01,V001,D001,R001,Cliente Alimentos Andinos,Alimentos,28.5,4200000,COP,Completado
+T002,2026-05-03,V001,D001,R002,Cliente Materiales Norte,Materiales de construccion,32.0,6800000,COP,Completado
+T003,2026-05-05,V002,D002,R003,Cliente Paqueteria Express,Paqueteria,8.0,2900000,COP,Completado
+T004,2026-05-07,V003,D003,R004,Cliente Puerto Pacifico,Contenedor,15.5,1800000,COP,Completado
+T005,2026-05-10,V005,D001,R005,Cliente Retail Caribe,Mercancia general,30.0,6100000,COP,Completado
+T006,2026-05-12,V004,D004,R001,Cliente Farma Centro,Medicamentos,4.0,2300000,COP,Completado
+T007,2026-05-15,V003,D003,R003,Cliente Agro Valle,Insumos agricolas,17.0,3500000,COP,Completado
+T008,2026-05-18,V001,D001,R006,Cliente Industrial Costa,Repuestos industriales,29.0,7900000,COP,En curso

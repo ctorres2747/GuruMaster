@@ -1,0 +1,13 @@
+﻿odometro_id,vehiculo_id,fecha_registro,kilometraje,fuente_registro,observaciones
+ODO001,V001,2026-05-01,470100,Conductor,Registro antes de viaje Medellin-Bogota
+ODO002,V001,2026-05-03,470980,Conductor,Registro antes de viaje Medellin-Barranquilla
+ODO003,V001,2026-05-18,472800,Sistema,Registro GPS viaje Bogota-Barranquilla
+ODO004,V002,2026-05-05,190500,Conductor,Registro antes de viaje Bogota-Cali
+ODO005,V002,2026-05-12,191200,Taller,Registro posterior a mantenimiento preventivo
+ODO006,V003,2026-05-07,325800,Conductor,Registro antes de viaje Cali-Buenaventura
+ODO007,V003,2026-05-15,326500,Conductor,Registro antes de viaje Bogota-Cali
+ODO008,V003,2026-05-20,327100,Taller,Registro para mantenimiento programado
+ODO009,V004,2026-05-12,106900,Conductor,Registro antes de viaje Medellin-Bogota
+ODO010,V004,2026-05-20,107450,Sistema,Registro GPS semanal
+ODO011,V005,2026-05-10,521500,Taller,Registro durante reparacion de transmision
+ODO012,V005,2026-05-18,521900,Taller,Vehiculo en mantenimiento
