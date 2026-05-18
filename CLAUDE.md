@@ -2,7 +2,7 @@
 
 Copiloto inteligente para el sector transporte de carga en Colombia. Permite consultar normatividad, analizar rentabilidad de viajes, revisar costos operativos y controlar activos de flota usando lenguaje natural.
 
-## Estado actual (actualizado 2026-05-16)
+## Estado actual (actualizado 2026-05-18)
 
 ### ✅ Módulo 1 — RAG documental (COMPLETADO)
 
@@ -54,10 +54,62 @@ python backend/build_vector_index.py --reset
 **Pendiente Módulo 1:**
 - Agregar documentos a `gestion_activos/`: guías SOAT, tecnomecánica, pólizas
 
-### ⏳ Módulos 2, 3, 4, 5 — Pendientes
+### ✅ Módulo 2 — Base de ingresos y gastos (COMPLETADO)
 
-- **Módulo 2** (viajes y gastos): `sql_service.py` esqueleto listo, falta crear SQLite con seed data
-- **Módulo 3** (activos/vehículos): esqueleto en `sql_service.py`, falta seed data
+SQLite creado en `db/gurumaster_carga.sqlite` con 7 tablas y 82 filas de seed data.
+
+**Script de inicialización:** `backend/init_db.py`
+```bash
+python backend/init_db.py   # crea el schema y carga todos los CSVs
+```
+
+**Tablas creadas:**
+| Tabla | Filas | Descripción |
+|---|---|---|
+| vehicles | 5 | Tractocamiones, dobles troques, turbos |
+| drivers | 5 | Conductores empleados y contratistas |
+| routes | 6 | Rutas nacionales (Medellín-Bogotá, Medellín-Barranquilla, etc.) |
+| trips | 8 | Viajes de mayo 2026 |
+| trip_expenses | 32 | Gastos por viaje (combustible, peajes, conductor, etc.) |
+| vehicle_documents | 15 | SOAT, RTM, pólizas, tarjetas de propiedad |
+| maintenance_events | 11 | Mantenimientos preventivos y correctivos |
+
+**Endpoints operativos:**
+- `GET /api/trips` — lista viajes (filtrable por `vehiculo_id`)
+- `GET /api/trips/{viaje_id}/profitability` — rentabilidad con desglose de gastos
+- `GET /api/analytics/monthly-summary?year=&month=` — resumen financiero mensual
+
+**Seed data (CSVs en `data/`):**
+- `seed_vehicles.csv`, `seed_drivers.csv`, `seed_routes.csv`
+- `seed_trips.csv`, `seed_trip_expenses.csv`
+- `seed_vehicle_documents.csv`, `seed_maintenance_events.csv`
+
+### ✅ Módulo 3 — Gestión de activos (COMPLETADO)
+
+**Endpoints operativos:**
+- `GET /api/vehicles` — lista con conteo de viajes y docs críticos por vehículo
+- `GET /api/vehicles/alerts?days=` — alertas con nivel de urgencia: `vencido` / `critico` / `urgente` / `proximo`
+- `GET /api/vehicles/{vehiculo_id}` — ficha completa: datos + documentos + últimos mantenimientos
+- `GET /api/vehicles/{vehiculo_id}/documents` — documentos con días restantes hasta vencimiento
+- `GET /api/vehicles/{vehiculo_id}/maintenance` — historial completo de mantenimiento
+- `GET /api/vehicles/{vehiculo_id}/profitability` — rentabilidad del activo: ingresos vs gastos operativos + mantenimiento
+
+**Niveles de urgencia en alertas de documentos:**
+- `vencido` → días_restantes < 0
+- `critico` → 0–7 días
+- `urgente` → 8–15 días
+- `proximo` → 16–30 días
+
+**Tablas adicionales cargadas:**
+- `odometer_readings` — 12 registros de kilometraje por vehículo (fuente: conductor, GPS, taller)
+- `alerts` — 12 alertas preconfiguradas (docs vencidos, llantas críticas, mantenimiento), ordenadas por nivel: Crítica → Alta → Media → Baja
+
+**Endpoints adicionales:**
+- `GET /api/vehicles/{vehiculo_id}/odometer` — historial de kilometraje
+- `GET /api/alerts` — panel de alertas consolidado (filtrable por `vehiculo_id` y `estado`)
+
+### ⏳ Módulos 4, 5 — Pendientes
+
 - **Módulo 4** (motor de consulta): clasificador operativo, falta conectar SQL al `/chat`
 - **Módulo 5** (frontend): pendiente adaptar `GuruMaster.html` de industrial a transporte de carga
 
