@@ -28,13 +28,18 @@ Copiloto inteligente para el sector transporte de carga en Colombia. Responde pr
 Pregunta del usuario
         ↓
   intent_classifier.py   →  normativa / financiera / activos / mixta
-        ↓                          ↓
-  rag_service.py          sql_service.py
-  (ChromaDB)              (SQLite)
-        ↓                          ↓
-         chat_service.py (GPT-4o-mini)
-                ↓
-          Respuesta con evidencia
+  (GPT-4o-mini)             + extrae placa y fechas de la pregunta
+        ↓
+  chat_service.py  (orquestador)
+     ↓                    ↓
+  rag_service.py      sql_service.py
+  (ChromaDB)          (SQLite — consultas parametrizadas)
+     ↓                    ↓
+      context_builder.py  (formatea evidencia para el LLM)
+              ↓
+      response_generator.py (GPT-4o-mini)
+              ↓
+  Respuesta con fuentes, métricas y advertencias
 ```
 
 ## Instalación
@@ -72,22 +77,48 @@ uvicorn main:app --reload
 Abrir en el navegador: `http://localhost:8000/docs`
 
 ```bash
-# Chat con RAG
+# Pregunta normativa (sin filtros — el clasificador lo enruta automáticamente)
 curl -X POST http://localhost:8000/chat \
   -H "Content-Type: application/json" \
-  -d '{"message": "¿Qué documentos necesito para registrar un despacho de carga?"}'
+  -d '{"pregunta": "Qué documentos necesito para registrar un despacho de carga"}'
 
-# Rentabilidad de un viaje
+# Pregunta financiera con placa en la pregunta (se extrae automáticamente)
+curl -X POST http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"pregunta": "ABC123 fue rentable en mayo"}'
+
+# Pregunta con filtros explícitos
+curl -X POST http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "pregunta": "Cuánto gasté en combustible este mes",
+    "filtros": { "vehiculo_id": "V001", "fecha_inicio": "2026-05-01", "fecha_fin": "2026-05-31" }
+  }'
+
+# Pregunta de activos (alertas, vencimientos, mantenimiento)
+curl -X POST http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"pregunta": "Cuáles llantas hay que cambiar pronto"}'
+
+# Endpoints REST directos
 curl http://localhost:8000/api/trips/T001/profitability
-
-# Resumen financiero del mes
 curl http://localhost:8000/api/analytics/monthly-summary?year=2026&month=5
-
-# Alertas de documentos próximos a vencer
 curl http://localhost:8000/api/vehicles/alerts?days=30
-
-# Rentabilidad por vehículo
 curl http://localhost:8000/api/vehicles/V001/profitability
+```
+
+**Estructura del response de `/chat`:**
+
+```json
+{
+  "respuesta": "Sí. El vehículo ABC123 tuvo una utilidad de $7,030,000 COP en mayo...",
+  "intencion": "financiera",
+  "confianza": 0.90,
+  "fuentes": [{ "tipo": "sql", "nombre": "trips + trip_expenses" }],
+  "datos_consultados": [{ "tipo": "sql", "nombre": "trips + trip_expenses" }],
+  "metricas": { "ingreso": 18900000, "gastos": 11870000, "utilidad": 7030000, "margen_pct": 37.2 },
+  "advertencias": []
+}
 ```
 
 ## Endpoints disponibles
@@ -107,43 +138,76 @@ curl http://localhost:8000/api/vehicles/V001/profitability
 | `GET /api/vehicles/{id}/odometer` | Historial de kilometraje |
 | `GET /api/alerts` | Panel de alertas consolidado por criticidad |
 
+## Frontend
+
+Abrir directamente en el navegador — no requiere servidor de desarrollo:
+
+```bash
+# Windows
+start frontend\GuruMaster.html
+
+# O arrastrar el archivo al navegador
+```
+
+El backend debe estar corriendo en `http://localhost:8000` antes de abrir el frontend.
+
+**Layout de 3 paneles:**
+
+| Panel | Contenido |
+|---|---|
+| Izquierdo (370px) | Chat con GuruMaster — input, loading dots, intent badges, warning banners |
+| Central (flex) | Tabs: **Evidencia** (fuentes RAG) · **Financiero** (métricas COP) · **Activos** (alertas flota) |
+| Derecho (268px) | KPIs de la última consulta, vehículo activo, resumen alertas, fleet list |
+
+**Funcionalidades clave:**
+- Selector de placa en el header — se auto-selecciona cuando el usuario menciona una placa en la pregunta
+- La placa seleccionada se incluye como `filtros.vehiculo_id` en el payload de `/chat`
+- El tab central cambia automáticamente según la intención clasificada por el backend
+- Dark mode integrado; alertas cargadas en background desde `/api/vehicles/alerts`
+
 ## Estructura del proyecto
 
 ```
 GuruMaster/
 ├── backend/
-│   ├── main.py                # FastAPI app
-│   ├── init_db.py             # Crea SQLite y carga seed data
-│   ├── document_loader.py     # Extrae texto de PDF/DOCX/HTML/TXT
-│   ├── build_vector_index.py  # Chunking + embeddings + ChromaDB
-│   ├── rag_service.py         # Búsqueda semántica
-│   ├── intent_classifier.py   # Clasifica intención del usuario
-│   ├── chat_service.py        # Orquesta RAG + LLM
-│   └── sql_service.py         # Consultas SQLite (viajes, vehículos, activos)
+│   ├── main.py                  # FastAPI app — arrancar con uvicorn main:app --reload
+│   ├── init_db.py               # Crea SQLite y carga seed data
+│   ├── schemas.py               # Pydantic: ChatRequest, ChatResponse, Filtros, Metricas
+│   ├── intent_classifier.py     # LLM-based: clasifica + extrae placa y fechas de la pregunta
+│   ├── chat_service.py          # Orquestador principal — POST /chat
+│   ├── context_builder.py       # Formatea RAG + SQL en texto estructurado para el LLM
+│   ├── response_generator.py    # Llamada a GPT-4o-mini con system prompt de GuruMaster Carga
+│   ├── guardrails.py            # Advertencias por ausencia de fuentes o datos
+│   ├── rag_service.py           # search_documents() sobre ChromaDB
+│   ├── sql_service.py           # Todas las consultas SQLite (REST + helpers para /chat)
+│   ├── document_loader.py       # Extrae texto de PDF/DOCX/HTML/TXT → JSONL
+│   └── build_vector_index.py    # Chunking + embeddings MiniLM + ChromaDB
 ├── data/
 │   ├── documents/
-│   │   ├── normatividad/      # Decreto 1079, Manual RNDC
-│   │   ├── costos_operativos/ # ABC SICE-TAC
-│   │   └── gestion_activos/   # (pendiente: SOAT, tecnomecánica)
-│   ├── processed_text/        # JSONL generado por document_loader.py
-│   └── seed_*.csv             # Datos demo: viajes, gastos, vehículos, documentos, odómetro, alertas
+│   │   ├── normatividad/        # Decreto 1079, Manual RNDC
+│   │   ├── costos_operativos/   # ABC SICE-TAC
+│   │   └── gestion_activos/     # (pendiente: SOAT, tecnomecánica)
+│   ├── processed_text/          # JSONL generado por document_loader.py
+│   └── seed_*.csv               # Datos demo: viajes, gastos, vehículos, documentos, odómetro, alertas
 ├── db/
-│   ├── chroma/                # Base vectorial ChromaDB (generada localmente)
-│   └── gurumaster_carga.sqlite# Base estructurada SQLite
-├── frontend/                  # GuruMaster.html (en desarrollo)
+│   ├── chroma/                  # Base vectorial ChromaDB (2,311 chunks)
+│   └── gurumaster_carga.sqlite  # Base SQLite (9 tablas, seed data mayo 2026)
+├── docs/                        # Documentos de referencia del proyecto
+├── frontend/
+│   └── GuruMaster.html          # React 18 single-file — 3 paneles, API real, dark mode
 ├── requirements.txt
-└── .env                       # OPENAI_API_KEY (no subir a git)
+└── .env                         # OPENAI_API_KEY (no subir a git)
 ```
 
 ## Estado del proyecto
 
 | Módulo | Descripción | Estado |
 |---|---|---|
-| 1 — RAG documental | Ingesta, embeddings, búsqueda semántica, /chat con LLM | ✅ Completo |
+| 1 — RAG documental | Ingesta, embeddings, búsqueda semántica | ✅ Completo |
 | 2 — Viajes y gastos | SQLite con trips, expenses, analytics mensuales | ✅ Completo |
-| 3 — Activos | Vehículos, documentos, mantenimiento, odómetro, alertas consolidadas | ✅ Completo |
-| 4 — Motor de consulta | SQL conectado al /chat para preguntas financieras | ⏳ Pendiente |
-| 5 — Frontend | Dashboard React adaptado a transporte de carga | ⏳ Pendiente |
+| 3 — Activos | Vehículos, documentos, mantenimiento, odómetro, alertas | ✅ Completo |
+| 4 — Motor de consulta | Clasificador LLM + RAG + SQL orquestados en `/chat` | ✅ Completo |
+| 5 — Frontend | Dashboard React single-file conectado al backend real | ✅ Completo |
 
 ## Documentos recomendados
 

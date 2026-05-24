@@ -1,103 +1,105 @@
-import os
-from pathlib import Path
-from typing import Optional
+from fastapi import APIRouter
 
-from dotenv import load_dotenv
-from fastapi import APIRouter, HTTPException
-from openai import OpenAI
-from pydantic import BaseModel
-
+from context_builder import build_context
+from guardrails import check
 from intent_classifier import classify_intent
 from rag_service import search_documents
-
-load_dotenv(Path(__file__).parent.parent / ".env")
+from response_generator import generate_response
+from schemas import ChatRequest, ChatResponse, Filtros, Metricas, SourceReference
+from sql_service import (
+    query_activos_context,
+    query_gastos_filtered,
+    query_trips_filtered,
+    query_vehicle_id_by_placa,
+    query_vehicle_profitability,
+)
 
 router = APIRouter(prefix="/chat", tags=["chat"])
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
-SYSTEM_PROMPT = """Eres GuruMaster, un asistente especializado en transporte de carga en Colombia.
-
-Responde usando la información de los documentos de contexto proporcionados.
-Si los documentos tienen información parcialmente relacionada, úsala y aclara qué parte responde la pregunta.
-Si los documentos no contienen ninguna información relevante, di: "No encontré evidencia en los documentos disponibles para responder esta pregunta."
-Nunca inventes normatividad, cifras ni requisitos legales que no estén en el contexto.
-Cita el artículo o sección cuando sea posible.
-Responde en español, de forma clara y concisa."""
-
-
-class ChatRequest(BaseModel):
-    message: str
-    context: Optional[dict] = None
-
-
-class ChatResponse(BaseModel):
-    answer: str
-    intent: str
-    severity: str
-    evidence: list
-    recommended_actions: list
-
-
-def _build_context(docs: list[dict]) -> str:
-    if not docs:
-        return "No se encontraron documentos relevantes."
-    parts = []
-    for i, doc in enumerate(docs, start=1):
-        parts.append(f"[Documento {i} — {doc['title']}]\n{doc['content']}")
-    return "\n\n---\n\n".join(parts)
-
-
-def _call_llm(message: str, context: str) -> str:
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user",   "content": f"Contexto:\n{context}\n\nPregunta: {message}"},
-        ],
-        temperature=0.2,
-        max_tokens=600,
-    )
-    return response.choices[0].message.content.strip()
 
 
 @router.post("", response_model=ChatResponse)
 def chat(req: ChatRequest):
-    intent   = classify_intent(req.message)
-    evidence = []
-    docs     = []
+    f: Filtros = req.filtros or Filtros()
+    intencion, confianza, entidades = classify_intent(req.pregunta)
 
-    if intent == "normativa":
-        # Normativa puede referenciar tanto decretos como regulaciones de costos (ej: SICE-TAC)
-        docs_norm = search_documents(req.message, pillar="normatividad",    n_results=4)
-        docs_cost = search_documents(req.message, pillar="costos_operativos", n_results=2)
-        docs = docs_norm + docs_cost
-    elif intent == "financiera":
-        docs = search_documents(req.message, pillar="costos_operativos", n_results=6)
-        if not docs:
-            docs = search_documents(req.message, n_results=6)
-    elif intent == "activos":
-        docs = search_documents(req.message, pillar="gestion_activos", n_results=6)
-        if not docs:
-            docs = search_documents(req.message, n_results=6)
+    # Filtros explícitos tienen prioridad; las entidades extraídas del LLM los complementan
+    placa_extraida = entidades.get("placa")
+    vehiculo_id = (
+        f.vehiculo_id
+        or (query_vehicle_id_by_placa(placa_extraida) if placa_extraida else None)
+    )
+    fecha_inicio = f.fecha_inicio or entidades.get("fecha_inicio")
+    fecha_fin    = f.fecha_fin    or entidades.get("fecha_fin")
+
+    rag_docs: list[dict] = []
+    sql_data: dict = {}
+    fuentes: list[SourceReference] = []
+    datos_consultados: list[dict] = []
+    metricas: Metricas | None = None
+
+    # --- RAG ---
+    if intencion == "normativa":
+        rag_docs = (
+            search_documents(req.pregunta, pillar="normatividad", n_results=4)
+            + search_documents(req.pregunta, pillar="costos_operativos", n_results=2)
+        )
+    elif intencion == "financiera":
+        rag_docs = search_documents(req.pregunta, pillar="costos_operativos", n_results=3)
+    elif intencion == "activos":
+        rag_docs = search_documents(req.pregunta, pillar="gestion_activos", n_results=3)
     else:  # mixta
-        docs = search_documents(req.message, n_results=6)
+        rag_docs = search_documents(req.pregunta, n_results=6)
 
-    evidence += [
-        {"type": "document", "label": d["title"], "source": d["source"], "content": d["content"]}
-        for d in docs
-    ]
+    for d in rag_docs:
+        fuentes.append(SourceReference(
+            tipo="documento",
+            nombre=d["title"],
+            pilar=d.get("pillar"),
+            contenido=d["content"][:300],
+        ))
 
-    if intent in ("financiera", "activos", "mixta"):
-        # TODO: conectar sql_service en Módulo 2/3
-        pass
+    # --- SQL financiero ---
+    if intencion in ("financiera", "mixta"):
+        trips = query_trips_filtered(vehiculo_id, fecha_inicio, fecha_fin)
+        gastos = query_gastos_filtered(vehiculo_id, fecha_inicio, fecha_fin)
+        sql_data["viajes"] = trips
+        sql_data["resumen_financiero"] = gastos
+        datos_consultados.append({"tipo": "sql", "nombre": "trips + trip_expenses"})
+        fuentes.append(SourceReference(tipo="sql", nombre="trips + trip_expenses"))
 
-    context = _build_context(docs)
-    answer  = _call_llm(req.message, context)
+        if vehiculo_id:
+            veh_prof = query_vehicle_profitability(vehiculo_id)
+            if veh_prof:
+                sql_data["rentabilidad_vehiculo"] = veh_prof
+                datos_consultados.append({"tipo": "sql", "nombre": "rentabilidad_vehiculo"})
+
+        if gastos["ingresos"] > 0:
+            metricas = Metricas(
+                ingreso=gastos["ingresos"],
+                gastos=gastos["total_gastos"],
+                utilidad=gastos["utilidad"],
+                margen_pct=gastos["margen_pct"],
+            )
+
+    # --- SQL activos ---
+    if intencion in ("activos", "mixta"):
+        activos = query_activos_context(vehiculo_id)
+        sql_data["activos"] = activos
+        datos_consultados.append({"tipo": "sql", "nombre": "alerts + vehicle_documents + maintenance_events"})
+        fuentes.append(SourceReference(tipo="sql", nombre="gestión de activos"))
+
+    # --- Contexto + respuesta ---
+    context = build_context(rag_docs, sql_data)
+    respuesta = generate_response(req.pregunta, context)
+
+    advertencias = check(respuesta, intencion, has_rag_sources=bool(rag_docs), has_sql_data=bool(sql_data))
 
     return ChatResponse(
-        answer=answer,
-        intent=intent,
-        severity="normal",
-        evidence=evidence,
-        recommended_actions=[],
+        respuesta=respuesta,
+        intencion=intencion,
+        confianza=confianza,
+        fuentes=fuentes,
+        datos_consultados=datos_consultados,
+        metricas=metricas,
+        advertencias=advertencias,
     )

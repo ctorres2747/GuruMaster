@@ -270,6 +270,113 @@ def query_alerts(vehiculo_id: str | None = None, estado: str | None = None) -> l
     return [dict(r) for r in rows]
 
 
+# --- Filtered queries for /chat ---
+
+def query_vehicle_id_by_placa(placa: str) -> str | None:
+    """Resuelve una placa (ABC123) al vehiculo_id interno (V001)."""
+    conn = get_conn()
+    row = conn.execute(
+        "SELECT vehiculo_id FROM vehicles WHERE UPPER(REPLACE(placa, '-', '')) = UPPER(REPLACE(?, '-', ''))",
+        [placa],
+    ).fetchone()
+    conn.close()
+    return row["vehiculo_id"] if row else None
+
+
+def query_trips_filtered(
+    vehiculo_id: str | None = None,
+    fecha_inicio: str | None = None,
+    fecha_fin: str | None = None,
+    limit: int = 20,
+) -> list[dict]:
+    conn = get_conn()
+    sql = (
+        "SELECT t.viaje_id, t.fecha_viaje, t.vehiculo_id, t.nombre_cliente, "
+        "t.ingreso, t.estado_viaje, r.ciudad_origen, r.ciudad_destino, r.distancia_km "
+        "FROM trips t LEFT JOIN routes r ON t.ruta_id = r.ruta_id WHERE 1=1"
+    )
+    params: list = []
+    if vehiculo_id:
+        sql += " AND t.vehiculo_id = ?"
+        params.append(vehiculo_id)
+    if fecha_inicio:
+        sql += " AND t.fecha_viaje >= ?"
+        params.append(fecha_inicio)
+    if fecha_fin:
+        sql += " AND t.fecha_viaje <= ?"
+        params.append(fecha_fin)
+    sql += f" ORDER BY t.fecha_viaje DESC LIMIT {limit}"
+    rows = conn.execute(sql, params).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def query_gastos_filtered(
+    vehiculo_id: str | None = None,
+    fecha_inicio: str | None = None,
+    fecha_fin: str | None = None,
+) -> dict:
+    conn = get_conn()
+    base_where = " WHERE 1=1"
+    params: list = []
+    if vehiculo_id:
+        base_where += " AND t.vehiculo_id = ?"
+        params.append(vehiculo_id)
+    if fecha_inicio:
+        base_where += " AND t.fecha_viaje >= ?"
+        params.append(fecha_inicio)
+    if fecha_fin:
+        base_where += " AND t.fecha_viaje <= ?"
+        params.append(fecha_fin)
+
+    gastos_rows = conn.execute(
+        "SELECT e.tipo_gasto, SUM(e.valor) as total "
+        "FROM trip_expenses e JOIN trips t ON e.viaje_id = t.viaje_id"
+        + base_where
+        + " GROUP BY e.tipo_gasto ORDER BY total DESC",
+        params,
+    ).fetchall()
+    income_row = conn.execute(
+        "SELECT SUM(t.ingreso) as total FROM trips t" + base_where, params
+    ).fetchone()
+    conn.close()
+
+    gastos_detalle = {r["tipo_gasto"]: r["total"] for r in gastos_rows}
+    total_gastos = sum(gastos_detalle.values())
+    ingresos = income_row["total"] or 0
+    utilidad = ingresos - total_gastos
+
+    return {
+        "ingresos": ingresos,
+        "gastos_detalle": gastos_detalle,
+        "total_gastos": total_gastos,
+        "utilidad": utilidad,
+        "margen_pct": round(utilidad / ingresos * 100, 1) if ingresos else 0,
+    }
+
+
+def query_activos_context(vehiculo_id: str | None = None) -> dict:
+    """Contexto consolidado de activos: alertas, documentos y mantenimiento."""
+    alerts = query_alerts(vehiculo_id=vehiculo_id)
+    doc_alerts = query_vehicle_alerts(days=30)
+
+    if vehiculo_id:
+        doc_alerts = [d for d in doc_alerts if d.get("vehiculo_id") == vehiculo_id]
+        docs = query_vehicle_documents(vehiculo_id)
+        maintenance = query_vehicle_maintenance(vehiculo_id)[:5]
+        return {
+            "alertas_sistema": alerts,
+            "documentos_por_vencer": doc_alerts,
+            "documentos_vehiculo": docs,
+            "ultimos_mantenimientos": maintenance,
+        }
+
+    return {
+        "alertas_sistema": alerts[:10],
+        "documentos_por_vencer": doc_alerts[:10],
+    }
+
+
 # --- FastAPI endpoints ---
 
 @router.get("/trips")

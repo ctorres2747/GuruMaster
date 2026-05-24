@@ -2,7 +2,7 @@
 
 Copiloto inteligente para el sector transporte de carga en Colombia. Permite consultar normatividad, analizar rentabilidad de viajes, revisar costos operativos y controlar activos de flota usando lenguaje natural.
 
-## Estado actual (actualizado 2026-05-18)
+## Estado actual (actualizado 2026-05-24) — MVP COMPLETO
 
 ### ✅ Módulo 1 — RAG documental (COMPLETADO)
 
@@ -108,14 +108,150 @@ python backend/init_db.py   # crea el schema y carga todos los CSVs
 - `GET /api/vehicles/{vehiculo_id}/odometer` — historial de kilometraje
 - `GET /api/alerts` — panel de alertas consolidado (filtrable por `vehiculo_id` y `estado`)
 
-### ⏳ Módulos 4, 5 — Pendientes
+### ✅ Módulo 4 — Motor inteligente de consulta (COMPLETADO)
 
-- **Módulo 4** (motor de consulta): clasificador operativo, falta conectar SQL al `/chat`
-- **Módulo 5** (frontend): pendiente adaptar `GuruMaster.html` de industrial a transporte de carga
+El motor orquesta RAG + SQL y conecta todo al endpoint `POST /chat`.
+
+**Archivos creados en este módulo:**
+
+| Archivo | Responsabilidad |
+|---|---|
+| `backend/schemas.py` | Modelos Pydantic: `ChatRequest`, `ChatResponse`, `Filtros`, `Metricas`, `SourceReference` |
+| `backend/context_builder.py` | Formatea RAG + SQL en texto estructurado para el LLM |
+| `backend/response_generator.py` | Llamada al LLM desacoplada; system prompt de GuruMaster Carga |
+| `backend/guardrails.py` | Advertencias cuando falta evidencia documental o datos SQL |
+
+**Archivos modificados:**
+
+| Archivo | Cambio |
+|---|---|
+| `backend/intent_classifier.py` | Reescrito con LLM (GPT-4o-mini) + extracción de entidades; fallback a keywords |
+| `backend/sql_service.py` | Agregadas: `query_trips_filtered`, `query_gastos_filtered`, `query_activos_context`, `query_vehicle_id_by_placa` |
+| `backend/chat_service.py` | Reescrito: orquesta clasificador → RAG → SQL → contexto → LLM → guardrails |
+
+**Contrato del endpoint `POST /chat` (nuevo schema):**
+
+```json
+// Request
+{
+  "pregunta": "ABC123 fue rentable en mayo",
+  "usuario": "demo",
+  "filtros": {
+    "vehiculo_id": "V001",      // opcional — también se extrae de la pregunta
+    "fecha_inicio": "2026-05-01",
+    "fecha_fin": "2026-05-31"
+  }
+}
+
+// Response
+{
+  "respuesta": "Sí. El vehículo ABC123 tuvo una utilidad de $7,030,000 COP...",
+  "intencion": "financiera",
+  "confianza": 0.90,
+  "fuentes": [
+    { "tipo": "sql", "nombre": "trips + trip_expenses" }
+  ],
+  "datos_consultados": [
+    { "tipo": "sql", "nombre": "trips + trip_expenses" }
+  ],
+  "metricas": {
+    "ingreso": 18900000,
+    "gastos": 11870000,
+    "utilidad": 7030000,
+    "margen_pct": 37.2
+  },
+  "advertencias": []
+}
+```
+
+**Clasificador de intención (LLM-based):**
+
+- Usa `gpt-4o-mini` con `response_format: json_object` — entiende lenguaje natural colombiano, coloquialismos, falta de tildes, sinónimos
+- Extrae entidades: `placa` (formato colombiano ABC123 / ABC-123) y fechas relativas (`"este mes"`, `"la semana pasada"`, `"mayo"`) resueltas a fechas ISO
+- La placa extraída de la pregunta se resuelve automáticamente a `vehiculo_id` via `query_vehicle_id_by_placa`
+- Los filtros explícitos del request tienen prioridad sobre las entidades extraídas
+- Fallback a keywords si el LLM no responde
+
+**Rutas de fuentes por intención:**
+
+| Intención | RAG | SQL |
+|---|---|---|
+| `normativa` | normatividad (4) + costos_operativos (2) | — |
+| `financiera` | costos_operativos (3) | `query_trips_filtered` + `query_gastos_filtered` + `query_vehicle_profitability` |
+| `activos` | gestion_activos (3) | `query_activos_context` (alertas + docs + mantenimiento) |
+| `mixta` | todos los pilares (6) | financiero + activos |
+
+**Formateo del contexto para el LLM (`context_builder.py`):**
+
+- RAG: muestra título + % de relevancia por chunk
+- Financiero: resumen narrativo con COP, gastos desglosados por categoría, tabla compacta de viajes
+- Activos: alertas ordenadas por nivel, documentos con días restantes calculados, últimos mantenimientos
+- Trunca a 4,500 chars si el contexto supera el límite
+
+**Decisiones de diseño del Módulo 4:**
+- Se mantienen 4 intenciones (no se expandió a 9) para el MVP
+- `llantas` se maneja vía intención `activos` → tablas `maintenance_events` + `alerts`
+- El LLM nunca genera SQL; todas las consultas son funciones parametrizadas
+- 2 llamadas LLM por `/chat`: clasificador + generador de respuesta
+
+### ✅ Módulo 5 — Frontend (COMPLETADO)
+
+**Archivo:** `frontend/GuruMaster.html` — single-file React 18 (CDN + Babel Standalone, funciona con `file://`), ~420 líneas.
+
+**Para abrir:** doble clic en `frontend/GuruMaster.html` o arrastrar al navegador. El backend debe estar corriendo en `http://localhost:8000`.
+
+**Layout — 3 paneles:**
+
+| Panel | Ancho | Contenido |
+|---|---|---|
+| Izquierdo | 370px | Chat: mensajes, input, chips de sugerencias |
+| Central | flex | Tabs: Evidencia / Financiero / Activos |
+| Derecho | 268px | KPIs, vehículo activo, resumen alertas, fleet list |
+
+**Header:**
+- Logo GuruMaster Carga Colombia
+- Pill de estado del backend (verde/rojo — llama `GET /health` al cargar)
+- Selector de placa (dropdown ABC123/DEF456/GHI789/JKL321/MNO654) — se auto-selecciona cuando el usuario menciona una placa en la pregunta (regex `[A-Z]{3}-?[0-9]{3}` sobre el texto del usuario antes de enviar)
+- Toggle dark/light mode
+
+**Chat (panel izquierdo):**
+- `POST /chat` con payload `{pregunta, filtros: {vehiculo_id}}` (vehiculo_id incluido si hay vehículo seleccionado)
+- Loading dots (animación dot-blink) mientras espera respuesta
+- Cada mensaje Guru muestra: respuesta formateada con `GuruText` + badge de intención coloreado (`normativa`/`financiera`/`activos`/`mixta`) + % confianza + conteo de fuentes
+- Warning banners para `advertencias[]` del backend
+- Burbujas de error con estilo diferenciado si el fetch falla
+- 3 chips de sugerencias rápidas en el footer (primeras 3 de SUGGESTIONS)
+
+**Panel central — 3 tabs (se cambia automáticamente según intención de la respuesta):**
+- **Evidencia** (activa para `normativa`): muestra fuentes documentales del campo `fuentes[]` donde `tipo === "documento"` — título, pilar y primeros 300 chars del contenido
+- **Financiero** (activa para `financiera`/`mixta` con métricas): 4 metric-cards (Ingresos / Gastos / Utilidad / Margen) del campo `metricas` + lista de `datos_consultados`
+- **Activos** (activa para `activos`): vehículo seleccionado si aplica + lista completa de alertas cargadas de `GET /api/vehicles/alerts?days=30`
+
+**Panel derecho:**
+- KPI rows de la última respuesta con métricas (colores: teal=ingresos, rojo=gastos, verde/rojo según signo para utilidad y margen)
+- Vehículo activo (placa, tipo, marca) si hay selección
+- Resumen de alertas agrupadas por nivel (vencido/critico/urgente/proximo) con conteo y colores
+- 3 sugerencias adicionales clickeables (últimas 3 de SUGGESTIONS) que envían la pregunta al chat
+- Fleet list: 5 vehículos con placa + marca, clickeables para seleccionar
+
+**Design system — idéntico al original:**
+- Mismas variables CSS: `--base`, `--surface`, `--raised`, `--border`, `--teal`, `--ink-1/2/3`, `--warn`, `--danger`, `--shadow-sm/md/lg`, `--r-sm/md/lg/xl`
+- Mismas fuentes: Inter (UI) + IBM Plex Mono (datos/placas)
+- Dark mode vía `[data-theme="dark"]` en `<html>`
+- Animaciones: `slide-up`, `fade-in`, `dot-blink`, `pulse-live`
+- Componentes reutilizados: `Icon` (Lucide CDN), `GuruText` (markdown-lite), `LogoMark` (SVG hexagonal)
+- TweaksPanel simplificado (solo toggle dark mode, draggable)
+
+**Decisiones de diseño del Módulo 5:**
+- No hay datos mock — todo viene del backend real (si el backend está offline, muestra error en burbuja con instrucciones de arranque)
+- No hay selector de pilar — la IA clasifica la intención automáticamente
+- La placa del selector se incluye como `filtros.vehiculo_id` en el payload de `/chat`; la placa extraída por el LLM del texto de la pregunta tiene menor prioridad que el filtro explícito (comportamiento heredado del backend)
+- El tab activo del panel central cambia automáticamente según `intencion` de la respuesta
+- El campo `fuentes[].contenido` viene truncado a 300 chars desde `chat_service.py` (suficiente para preview en la UI)
 
 ### Frontend MVP
 
-- `frontend/GuruMaster.html` — Demo visual React single-file, aún con datos mock de mantenimiento industrial
+- `frontend/GuruMaster.html` — Dashboard React single-file adaptado a transporte de carga Colombia. Conectado al backend real (`POST /chat`). Ver sección Módulo 5 para detalle completo.
 
 ## Producto
 
@@ -270,24 +406,42 @@ Adaptar el frontend actual (activos industriales → vehículos/rutas):
 
 ## Archivos relevantes
 
-**Backend:**
-- `backend/document_loader.py` — Extrae texto por página (PDF/DOCX/HTML/TXT), genera JSONL
-- `backend/build_vector_index.py` — Lee JSONL, chunking 800 chars + embeddings MiniLM + ChromaDB
-- `backend/rag_service.py` — `search_documents(query, pillar, n_results)` sobre ChromaDB
-- `backend/intent_classifier.py` — Clasifica pregunta en normativa/financiera/activos/mixta
-- `backend/chat_service.py` — RAG + GPT-4o-mini, endpoint POST /chat
+**Backend — Motor de consulta (Módulo 4):**
+- `backend/schemas.py` — Pydantic: `ChatRequest(pregunta, usuario, filtros)`, `ChatResponse(respuesta, intencion, confianza, fuentes, datos_consultados, metricas, advertencias)`
+- `backend/intent_classifier.py` — `classify_intent(msg) → (str, float, dict)`: LLM-based, extrae placa + fechas, fallback a keywords
+- `backend/context_builder.py` — `build_context(rag_docs, sql_data) → str`: formateadores específicos por tipo de dato
+- `backend/response_generator.py` — `generate_response(pregunta, context) → str`: llamada a GPT-4o-mini con system prompt de GuruMaster Carga
+- `backend/guardrails.py` — `check(...) → list[str]`: advertencias por ausencia de fuentes o datos
+- `backend/chat_service.py` — orquestador principal, `POST /chat`, resuelve placa→vehiculo_id automáticamente
+
+**Backend — Datos estructurados (Módulos 2 y 3):**
 - `backend/main.py` — FastAPI app, arrancar con `uvicorn main:app --reload` desde `/backend`
-- `backend/sql_service.py` — Endpoints SQL (esqueleto, falta SQLite con datos)
+- `backend/sql_service.py` — todas las consultas SQLite; funciones para chat: `query_trips_filtered`, `query_gastos_filtered`, `query_activos_context`, `query_vehicle_id_by_placa`
+- `backend/init_db.py` — crea schema y carga todos los CSVs de seed data
+
+**Backend — RAG (Módulo 1):**
+- `backend/document_loader.py` — Extrae texto por página (PDF/DOCX/HTML/TXT), genera JSONL
+- `backend/build_vector_index.py` — chunking 800 chars + embeddings MiniLM + ChromaDB
+- `backend/rag_service.py` — `search_documents(query, pillar, n_results)` sobre ChromaDB
 
 **Datos:**
 - `data/processed_text/processed_all.jsonl` — 634 páginas extraídas de los 3 documentos
 - `data/documents/normatividad/` — Decreto 1079 + Manual RNDC
 - `data/documents/costos_operativos/` — ABC_SICE_TAC.txt
-- `data/seed_*.csv` — CSVs de seed data para SQLite (viajes, gastos, vehículos, etc.)
+- `data/seed_*.csv` — CSVs de seed data: viajes, gastos, vehículos, documentos, odómetro, alertas
 
 **DB:**
 - `db/chroma/` — 2,311 chunks indexados (modelo: paraphrase-multilingual-MiniLM-L12-v2)
-- `db/gurumaster_carga.sqlite` — NO CREADO AÚN (Módulo 2)
+- `db/gurumaster_carga.sqlite` — SQLite con 9 tablas y seed data de mayo 2026
+
+**Vehículos en la demo (para referencia en preguntas de prueba):**
+| vehiculo_id | placa | tipo | marca |
+|---|---|---|---|
+| V001 | ABC123 | Tractocamion | Kenworth |
+| V002 | DEF456 | Camion sencillo | Hino |
+| V003 | GHI789 | Doble troque | Chevrolet |
+| V004 | JKL321 | Turbo | NPR |
+| V005 | MNO654 | Tractocamion | Freightliner |
 
 ## Fuentes documentales recomendadas
 
