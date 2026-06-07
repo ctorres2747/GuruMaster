@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GuruMaster Carga Colombia — Arquitectura de Software</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:        #14142a;
+  --bg-grid:   #1c1c3a;
+  --panel:     #1e1e3f;
+  --panel-2:   #252548;
+  --line:      #3a3a6a;
+  --line-soft: #2c2c52;
+
+  --txt-1:  #ececff;
+  --txt-2:  #a8a8d8;
+  --txt-3:  #6e6ea0;
+
+  /* component colors */
+  --blue:   #4a9eff;   --blue-bg:   rgba(74,158,255,.12);   --blue-br:   rgba(74,158,255,.4);
+  --green:  #34d399;   --green-bg:  rgba(52,211,153,.12);   --green-br:  rgba(52,211,153,.4);
+  --orange: #fb923c;   --orange-bg: rgba(251,146,60,.12);   --orange-br: rgba(251,146,60,.4);
+  --purple: #a78bfa;   --purple-bg: rgba(167,139,250,.12);  --purple-br: rgba(167,139,250,.4);
+  --gray:   #94a3b8;   --gray-bg:   rgba(148,163,184,.1);   --gray-br:   rgba(148,163,184,.35);
+  --red:    #f87171;
+
+  --mono: 'IBM Plex Mono', monospace;
+  --sans: 'Inter', sans-serif;
+}
+
+body {
+  font-family: var(--sans);
+  background:
+    radial-gradient(circle at 20% 0%, #1a1a38 0%, transparent 50%),
+    radial-gradient(circle at 80% 100%, #1a2a3a 0%, transparent 50%),
+    var(--bg);
+  background-attachment: fixed;
+  color: var(--txt-1);
+  min-height: 100vh;
+  padding: 32px;
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--line); border-radius: 5px; }
+
+.canvas { max-width: 1640px; margin: 0 auto; }
+
+/* ── Title ── */
+.title-bar {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  margin-bottom: 28px; padding-bottom: 20px;
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap; gap: 16px;
+}
+.title-bar h1 { font-size: 28px; font-weight: 800; letter-spacing: -.02em; }
+.title-bar h1 .accent { color: var(--green); }
+.title-bar .sub { font-size: 13px; color: var(--txt-2); margin-top: 6px; font-family: var(--mono); }
+.title-bar .meta { text-align: right; font-size: 11px; color: var(--txt-3); font-family: var(--mono); line-height: 1.7; }
+
+/* ── Legend ── */
+.legend {
+  display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+  padding: 14px 18px; background: var(--panel); border: 1px solid var(--line);
+  border-radius: 12px; margin-bottom: 28px;
+}
+.legend .lg-title { font-size: 11px; font-weight: 700; color: var(--txt-3); letter-spacing: .1em; text-transform: uppercase; margin-right: 8px; }
+.legend .chip {
+  display: inline-flex; align-items: center; gap: 7px; padding: 5px 12px;
+  border-radius: 100px; font-size: 12px; font-weight: 500;
+}
+.legend .dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+
+/* ── Layer scaffold ── */
+.layer { margin-bottom: 8px; }
+.layer-label {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--txt-3); margin-bottom: 14px;
+  padding-left: 2px;
+}
+.layer-label::before { content: ''; width: 22px; height: 2px; background: var(--line); border-radius: 2px; }
+
+/* ── Generic node card ── */
+.node {
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 14px; overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0,0,0,.25);
+  position: relative;
+}
+.node::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; }
+.node.blue::before   { background: var(--blue); }
+.node.green::before  { background: var(--green); }
+.node.orange::before { background: var(--orange); }
+.node.purple::before { background: var(--purple); }
+.node.gray::before   { background: var(--gray); }
+
+.node-hd { padding: 13px 16px 11px; display: flex; align-items: flex-start; gap: 11px; }
+.node-ico {
+  width: 34px; height: 34px; border-radius: 9px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 17px;
+}
+.node.blue   .node-ico { background: var(--blue-bg);   border: 1px solid var(--blue-br); }
+.node.green  .node-ico { background: var(--green-bg);  border: 1px solid var(--green-br); }
+.node.orange .node-ico { background: var(--orange-bg); border: 1px solid var(--orange-br); }
+.node.purple .node-ico { background: var(--purple-bg); border: 1px solid var(--purple-br); }
+.node.gray   .node-ico { background: var(--gray-bg);   border: 1px solid var(--gray-br); }
+
+.node-titles { flex: 1; min-width: 0; }
+.node-title { font-size: 14px; font-weight: 700; letter-spacing: -.01em; line-height: 1.25; }
+.node-file { font-size: 11px; font-family: var(--mono); color: var(--txt-3); margin-top: 3px; word-break: break-all; }
+.node.blue   .node-file { color: var(--blue); }
+.node.green  .node-file { color: var(--green); }
+.node.orange .node-file { color: var(--orange); }
+.node.purple .node-file { color: var(--purple); }
+.node.gray   .node-file { color: var(--gray); }
+
+.node-body { padding: 0 16px 13px; }
+.node-body ul { list-style: none; display: flex; flex-direction: column; gap: 5px; }
+.node-body li {
+  font-size: 12px; color: var(--txt-2); line-height: 1.5; padding-left: 15px; position: relative;
+}
+.node-body li::before { content: '▸'; position: absolute; left: 0; color: var(--txt-3); font-size: 10px; top: 1px; }
+.node-body li .mono { font-family: var(--mono); font-size: 11px; color: var(--txt-1); }
+.node-body li .tag {
+  display: inline-block; font-family: var(--mono); font-size: 10px; padding: 1px 6px;
+  border-radius: 4px; background: var(--panel-2); color: var(--txt-2); margin: 1px 2px 1px 0;
+}
+
+.node-note {
+  margin: 0 16px 14px; padding: 9px 12px; border-radius: 9px;
+  font-size: 11.5px; line-height: 1.5; font-style: italic;
+  display: flex; gap: 8px; align-items: flex-start;
+}
+.node-note::before { content: '✦'; font-style: normal; flex-shrink: 0; opacity: .7; }
+.node.blue   .node-note { background: var(--blue-bg);   color: #bcd9ff; }
+.node.green  .node-note { background: var(--green-bg);  color: #a7f0d4; }
+.node.orange .node-note { background: var(--orange-bg); color: #ffd4ad; }
+.node.purple .node-note { background: var(--purple-bg); color: #d6c9ff; }
+.node.gray   .node-note { background: var(--gray-bg);   color: #cfd8e3; }
+
+/* ── Arrows / connectors ── */
+.flow-arrow {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 6px 0; gap: 0;
+}
+.flow-arrow .stem { width: 2px; height: 18px; background: linear-gradient(var(--line-soft), var(--line)); }
+.flow-arrow .head {
+  width: 0; height: 0; border-left: 6px solid transparent; border-right: 6px solid transparent;
+  border-top: 8px solid var(--line);
+}
+.flow-arrow .lbl {
+  font-size: 10px; font-family: var(--mono); color: var(--txt-3);
+  background: var(--panel); padding: 2px 8px; border-radius: 100px; border: 1px solid var(--line-soft);
+  margin: 2px 0;
+}
+
+/* ── Backend routes strip ── */
+.routes { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.route {
+  font-family: var(--mono); font-size: 10.5px; padding: 3px 9px; border-radius: 6px;
+  background: var(--panel-2); border: 1px solid var(--line-soft); color: var(--txt-2);
+}
+.route .verb { font-weight: 600; }
+.route .get  { color: var(--green); }
+.route .post { color: var(--orange); }
+
+/* ── Orchestrator group ── */
+.orchestrator {
+  border: 2px dashed var(--blue-br); border-radius: 18px;
+  padding: 16px; background: rgba(74,158,255,.04);
+  position: relative;
+}
+.orchestrator-tag {
+  position: absolute; top: -12px; left: 24px;
+  background: var(--bg); padding: 2px 14px; border-radius: 100px;
+  font-size: 11px; font-weight: 700; color: var(--blue); font-family: var(--mono);
+  border: 1px solid var(--blue-br); letter-spacing: .03em;
+}
+
+/* grid helpers */
+.grid { display: grid; gap: 14px; }
+.g2 { grid-template-columns: repeat(2, 1fr); }
+.g3 { grid-template-columns: repeat(3, 1fr); }
+.g4 { grid-template-columns: repeat(4, 1fr); }
+
+/* main 2-col: ingestion sidebar + main flow */
+.main-split { display: grid; grid-template-columns: 280px 1fr; gap: 24px; align-items: start; }
+
+/* ingestion vertical flow */
+.ingest-flow { display: flex; flex-direction: column; gap: 0; }
+.ingest-step {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 11px;
+  padding: 11px 14px; position: relative;
+}
+.ingest-step .st-file { font-family: var(--mono); font-size: 11.5px; color: var(--gray); font-weight: 600; }
+.ingest-step .st-desc { font-size: 11px; color: var(--txt-2); margin-top: 3px; line-height: 1.45; }
+.ingest-arrow { display: flex; justify-content: center; padding: 5px 0; }
+.ingest-arrow .a { color: var(--gray); font-size: 14px; opacity: .6; }
+
+.chatresp {
+  background: var(--panel-2); border: 1px solid var(--orange-br); border-radius: 12px;
+  padding: 13px 15px; margin: 0 auto; max-width: 880px;
+}
+.chatresp .cr-hd { font-size: 11px; font-weight: 700; color: var(--orange); font-family: var(--mono); margin-bottom: 8px; letter-spacing: .03em; }
+.chatresp .cr-fields { display: flex; gap: 6px; flex-wrap: wrap; }
+.chatresp .cr-field {
+  font-family: var(--mono); font-size: 11px; padding: 3px 9px; border-radius: 6px;
+  background: var(--orange-bg); border: 1px solid var(--orange-br); color: #ffd4ad;
+}
+
+/* callout note bar */
+.callout {
+  display: flex; align-items: center; gap: 12px; padding: 14px 18px;
+  background: linear-gradient(90deg, var(--blue-bg), transparent);
+  border: 1px solid var(--blue-br); border-left: 4px solid var(--blue);
+  border-radius: 12px; margin: 22px 0;
+}
+.callout .ic { font-size: 20px; }
+.callout .tx { font-size: 13px; color: #cfe2ff; line-height: 1.5; }
+.callout .tx b { color: var(--txt-1); font-weight: 700; }
+.callout .cost { font-family: var(--mono); color: var(--green); font-weight: 600; }
+
+.section-gap { height: 8px; }
+
+@media (max-width: 1100px) {
+  .main-split { grid-template-columns: 1fr; }
+  .g4 { grid-template-columns: repeat(2, 1fr); }
+  .g3 { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 640px) {
+  body { padding: 16px; }
+  .g4, .g3, .g2 { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<div class="canvas">
+
+  <!-- TITLE -->
+  <div class="title-bar">
+    <div>
+      <h1>GuruMaster <span class="accent">Carga Colombia</span> — Arquitectura</h1>
+      <div class="sub">Copiloto de IA para operadores de transporte de carga · FastAPI + React + RAG + Text-to-SQL</div>
+    </div>
+    <div class="meta">
+      DOCUMENTO TÉCNICO · v2.0<br />
+      Junio 2026 · Bogotá, Colombia<br />
+      Stack: Python · uvicorn · ChromaDB · SQLite · GPT-4o-mini
+    </div>
+  </div>
+
+  <!-- LEGEND -->
+  <div class="legend">
+    <span class="lg-title">Leyenda</span>
+    <span class="chip" style="background:var(--purple-bg);border:1px solid var(--purple-br);color:var(--purple)"><span class="dot" style="background:var(--purple)"></span>Frontend</span>
+    <span class="chip" style="background:var(--orange-bg);border:1px solid var(--orange-br);color:var(--orange)"><span class="dot" style="background:var(--orange)"></span>API / Routing</span>
+    <span class="chip" style="background:var(--blue-bg);border:1px solid var(--blue-br);color:var(--blue)"><span class="dot" style="background:var(--blue)"></span>IA / LLM</span>
+    <span class="chip" style="background:var(--green-bg);border:1px solid var(--green-br);color:var(--green)"><span class="dot" style="background:var(--green)"></span>Almacén de datos</span>
+    <span class="chip" style="background:var(--gray-bg);border:1px solid var(--gray-br);color:var(--gray)"><span class="dot" style="background:var(--gray)"></span>Utilidades / Ingesta</span>
+  </div>
+
+  <div class="main-split">
+
+    <!-- ════ INGESTION PIPELINE (sidebar) ════ -->
+    <div>
+      <div class="layer-label">Pipeline de Ingesta</div>
+      <div class="ingest-flow">
+        <div class="ingest-step">
+          <div class="st-file">📄 PDF / DOCX / TXT</div>
+          <div class="st-desc">Decreto 1079, Manual RNDC, ABC SICE-TAC</div>
+        </div>
+        <div class="ingest-arrow"><span class="a">▼</span></div>
+        <div class="ingest-step">
+          <div class="st-file">document_loader.py</div>
+          <div class="st-desc">Extrae y trocea texto en chunks semánticos</div>
+        </div>
+        <div class="ingest-arrow"><span class="a">▼</span></div>
+        <div class="ingest-step">
+          <div class="st-file">data/processed_text/<br />*.jsonl</div>
+          <div class="st-desc">Texto procesado intermedio</div>
+        </div>
+        <div class="ingest-arrow"><span class="a">▼</span></div>
+        <div class="ingest-step">
+          <div class="st-file">build_vector_index.py</div>
+          <div class="st-desc">Calcula embeddings e indexa</div>
+        </div>
+        <div class="ingest-arrow"><span class="a">▼</span></div>
+        <div class="ingest-step" style="border-color:var(--green-br);background:var(--green-bg)">
+          <div class="st-file" style="color:var(--green)">⬢ ChromaDB</div>
+          <div class="st-desc">Vector store poblado</div>
+        </div>
+      </div>
+      <div class="node-note gray" style="margin:14px 0 0;border-radius:11px">
+        Ejecutar una vez (o al añadir documentos):<br />
+        <span style="font-family:var(--mono);font-style:normal;font-size:10.5px;color:var(--txt-1)">python backend/build_vector_index.py --reset</span>
+      </div>
+    </div>
+
+    <!-- ════ MAIN VERTICAL FLOW ════ -->
+    <div>
+
+      <!-- USER LAYER -->
+      <div class="layer">
+        <div class="layer-label">Capa de Usuario</div>
+        <div class="node purple">
+          <div class="node-hd">
+            <div class="node-ico">🖥️</div>
+            <div class="node-titles">
+              <div class="node-title">Browser / Web UI</div>
+              <div class="node-file">React 18 (CDN) · single-file · GuruMaster.html</div>
+            </div>
+          </div>
+          <div class="node-body">
+            <ul>
+              <li>Layout de <strong>3 paneles</strong>: <span class="tag">Izq · Chat</span><span class="tag">Centro · Datos (Evidencia/Financiero/Activos)</span><span class="tag">Der · KPIs & Flota</span></li>
+              <li>Conecta al backend vía <span class="mono">HTTP</span> — mismo origen, sin CORS</li>
+            </ul>
+          </div>
+          <div class="node-note">Resumen corto del LLM en el chat → tablas estructuradas detalladas en el panel central</div>
+        </div>
+      </div>
+
+      <div class="flow-arrow"><div class="stem"></div><span class="lbl">HTTP · mismo origen</span><div class="head"></div></div>
+
+      <!-- ENTRY POINT -->
+      <div class="layer">
+        <div class="layer-label">Punto de Entrada</div>
+        <div class="node gray">
+          <div class="node-hd">
+            <div class="node-ico">⚡</div>
+            <div class="node-titles">
+              <div class="node-title">iniciar_gurumaster.bat</div>
+              <div class="node-file">Windows launcher</div>
+            </div>
+          </div>
+          <div class="node-body">
+            <ul>
+              <li>Libera el puerto <span class="mono">8000</span>, lanza <span class="mono">uvicorn</span>, abre el navegador</li>
+            </ul>
+          </div>
+          <div class="node-note">Lanzamiento con un solo doble-clic en Windows</div>
+        </div>
+      </div>
+
+      <div class="flow-arrow"><div class="stem"></div><span class="lbl">uvicorn :8000</span><div class="head"></div></div>
+
+      <!-- BACKEND LAYER -->
+      <div class="layer">
+        <div class="layer-label">Capa Backend · FastAPI · puerto 8000</div>
+        <div class="node orange">
+          <div class="node-hd">
+            <div class="node-ico">🐍</div>
+            <div class="node-titles">
+              <div class="node-title">main.py</div>
+              <div class="node-file">FastAPI — Python · uvicorn</div>
+            </div>
+          </div>
+          <div class="node-body">
+            <ul>
+              <li>Sirve el frontend en <span class="mono">GET /</span></li>
+              <li>Middleware <strong>CORS</strong> — refleja el header origin, maneja <span class="mono">null</span> de <span class="mono">file://</span></li>
+            </ul>
+            <div class="routes">
+              <span class="route"><span class="verb get">GET</span> /api/trips</span>
+              <span class="route"><span class="verb get">GET</span> /api/vehicles</span>
+              <span class="route"><span class="verb get">GET</span> /api/alerts</span>
+              <span class="route"><span class="verb get">GET</span> /api/analytics/monthly-summary</span>
+              <span class="route"><span class="verb post">POST</span> /chat</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flow-arrow"><div class="stem"></div><span class="lbl">POST /chat</span><div class="head"></div></div>
+
+      <!-- ORCHESTRATOR + INTELLIGENCE LAYER -->
+      <div class="orchestrator">
+        <div class="orchestrator-tag">chat_service.py orquesta</div>
+
+        <div class="node blue" style="margin-bottom:16px;margin-top:4px">
+          <div class="node-hd">
+            <div class="node-ico">🧠</div>
+            <div class="node-titles">
+              <div class="node-title">Chat Orchestrator</div>
+              <div class="node-file">backend/chat_service.py</div>
+            </div>
+          </div>
+          <div class="node-body">
+            <ul>
+              <li>Flujo: Intent → RAG → SQL → <span class="mono">[T2SQL]</span> → Context → Generate → Guardrails</li>
+              <li>Devuelve <span class="mono">ChatResponse</span> al backend</li>
+            </ul>
+          </div>
+          <div class="node-note">Máximo 3 llamadas LLM por petición: classify + [T2SQL opcional] + generate</div>
+        </div>
+
+        <!-- Intelligence boxes grid -->
+        <div class="grid g3">
+          <!-- 1 Intent Classifier -->
+          <div class="node blue">
+            <div class="node-hd">
+              <div class="node-ico">①</div>
+              <div class="node-titles">
+                <div class="node-title">Intent Classifier</div>
+                <div class="node-file">intent_classifier.py</div>
+              </div>
+            </div>
+            <div class="node-body">
+              <ul>
+                <li><span class="mono">GPT-4o-mini</span> · JSON <span class="mono">response_format</span></li>
+                <li>Extrae: intent <span class="tag">normativa</span><span class="tag">financiera</span><span class="tag">activos</span><span class="tag">mixta</span></li>
+                <li>placa <span class="mono">ABC123</span> + rango de fechas</li>
+                <li>Fallback: keyword matching</li>
+              </ul>
+            </div>
+            <div class="node-note">LLM #1 — entiende español colombiano y coloquialismos</div>
+          </div>
+
+          <!-- 2 RAG Service -->
+          <div class="node blue">
+            <div class="node-hd">
+              <div class="node-ico">②</div>
+              <div class="node-titles">
+                <div class="node-title">RAG Service</div>
+                <div class="node-file">rag_service.py</div>
+              </div>
+            </div>
+            <div class="node-body">
+              <ul>
+                <li><span class="mono">search_documents(query, pillar, n)</span></li>
+                <li>Ruteo por pilar: normativa→<span class="mono">normatividad+costos</span>, financiera→<span class="mono">costos</span>, activos→<span class="mono">gestion_activos</span>, mixta→<span class="mono">all</span></li>
+                <li>Conecta a <strong style="color:var(--green)">ChromaDB</strong></li>
+              </ul>
+            </div>
+            <div class="node-note">Búsqueda semántica — embeddings paraphrase-multilingual-MiniLM-L12-v2</div>
+          </div>
+
+          <!-- 3 SQL Service -->
+          <div class="node blue">
+            <div class="node-hd">
+              <div class="node-ico">③</div>
+              <div class="node-titles">
+                <div class="node-title">SQL Service</div>
+                <div class="node-file">sql_service.py</div>
+              </div>
+            </div>
+            <div class="node-body">
+              <ul>
+                <li><span class="mono">query_trips_filtered</span></li>
+                <li><span class="mono">query_gastos_filtered</span></li>
+                <li><span class="mono">query_activos_context</span></li>
+                <li><span class="mono">query_vehicle_profitability</span></li>
+                <li><span class="mono">query_vehicle_id_by_placa</span></li>
+                <li>Conecta a <strong style="color:var(--green)">SQLite</strong></li>
+              </ul>
+            </div>
+            <div class="node-note">Queries parametrizadas predefinidas — el LLM nunca las genera</div>
+          </div>
+
+          <!-- 4 Text-to-SQL -->
+          <div class="node blue">
+            <div class="node-hd">
+              <div class="node-ico">④</div>
+              <div class="node-titles">
+                <div class="node-title">Text-to-SQL <span style="font-size:10px;color:var(--orange);font-weight:600">· condicional</span></div>
+                <div class="node-file">text_to_sql.py</div>
+              </div>
+            </div>
+            <div class="node-body">
+              <ul>
+                <li><span class="mono">GPT-4o-mini</span> genera <span class="mono">SELECT</span> desde lenguaje natural</li>
+                <li>Seguridad: bloquea <span class="mono" style="color:var(--red)">INSERT/UPDATE/DELETE/DROP/CREATE/ALTER</span></li>
+                <li>Schema-aware vía <span class="mono">PRAGMA table_info</span></li>
+                <li>Solo para consultas a nivel flota (sin <span class="mono">vehiculo_id</span>)</li>
+              </ul>
+            </div>
+            <div class="node-note">LLM #2 (condicional) — queries analíticas dinámicas</div>
+          </div>
+
+          <!-- 5 Context Builder -->
+          <div class="node blue">
+            <div class="node-hd">
+              <div class="node-ico">⑤</div>
+              <div class="node-titles">
+                <div class="node-title">Context Builder</div>
+                <div class="node-file">context_builder.py</div>
+              </div>
+            </div>
+            <div class="node-body">
+              <ul>
+                <li>Combina docs RAG + datos SQL en texto estructurado</li>
+                <li>Resultados T2SQL <strong>primero</strong> (evita truncado)</li>
+                <li>Máx. <span class="mono">6,000</span> caracteres</li>
+              </ul>
+            </div>
+            <div class="node-note">Formatea como texto legible, no JSON crudo</div>
+          </div>
+
+          <!-- 6 Response Generator -->
+          <div class="node blue">
+            <div class="node-hd">
+              <div class="node-ico">⑥</div>
+              <div class="node-titles">
+                <div class="node-title">Response Generator</div>
+                <div class="node-file">response_generator.py</div>
+              </div>
+            </div>
+            <div class="node-body">
+              <ul>
+                <li><span class="mono">GPT-4o-mini</span> · persona "GuruMaster Carga"</li>
+                <li>Template corto (2-3 líneas) si <span class="mono">panel_disponible=True</span></li>
+                <li>Template completo si no hay panel estructurado</li>
+              </ul>
+            </div>
+            <div class="node-note">LLM #3 — respuesta corta cuando el panel tiene el detalle</div>
+          </div>
+        </div>
+
+        <!-- Guardrails (full width) -->
+        <div class="node blue" style="margin-top:14px">
+          <div class="node-hd">
+            <div class="node-ico">⑦</div>
+            <div class="node-titles">
+              <div class="node-title">Guardrails</div>
+              <div class="node-file">backend/guardrails.py</div>
+            </div>
+          </div>
+          <div class="node-body">
+            <ul>
+              <li>Advierte cuando: no hay fuentes RAG para <span class="tag">normativa</span> · no hay datos SQL para <span class="tag">financiera</span><span class="tag">activos</span></li>
+              <li>Devuelve lista <span class="mono">advertencias[]</span></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- ChatResponse data box -->
+      <div class="flow-arrow"><div class="stem"></div><span class="lbl">ChatResponse →  frontend</span><div class="head"></div></div>
+      <div class="chatresp">
+        <div class="cr-hd">⬡ ChatResponse</div>
+        <div class="cr-fields">
+          <span class="cr-field">respuesta</span>
+          <span class="cr-field">intencion</span>
+          <span class="cr-field">confianza</span>
+          <span class="cr-field">metricas</span>
+          <span class="cr-field">datos_panel</span>
+          <span class="cr-field">fuentes</span>
+          <span class="cr-field">advertencias</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- CALLOUT -->
+  <div class="callout">
+    <span class="ic">💸</span>
+    <span class="tx">Las <b>3 llamadas LLM</b> usan <b>gpt-4o-mini</b> — <span class="cost">~$0.001 por petición de chat</span></span>
+  </div>
+
+  <!-- DATA LAYER -->
+  <div class="layer">
+    <div class="layer-label">Capa de Datos</div>
+    <div class="grid g3">
+      <!-- ChromaDB -->
+      <div class="node green">
+        <div class="node-hd">
+          <div class="node-ico">⬢</div>
+          <div class="node-titles">
+            <div class="node-title">ChromaDB</div>
+            <div class="node-file">db/chroma/</div>
+          </div>
+        </div>
+        <div class="node-body">
+          <ul>
+            <li><strong>2,311 chunks</strong> · 3 pilares:</li>
+            <li><span class="tag">normatividad</span> Decreto 1079 (528p) + Manual RNDC (105p)</li>
+            <li><span class="tag">costos_operativos</span> ABC SICE-TAC</li>
+            <li><span class="tag">gestion_activos</span> <span style="color:var(--txt-3)">vacío — pendiente</span></li>
+            <li>Embeddings: <span class="mono">paraphrase-multilingual-MiniLM-L12-v2</span></li>
+          </ul>
+        </div>
+        <div class="node-note">Vector store — búsqueda por similitud semántica</div>
+      </div>
+
+      <!-- SQLite -->
+      <div class="node green">
+        <div class="node-hd">
+          <div class="node-ico">🗄️</div>
+          <div class="node-titles">
+            <div class="node-title">SQLite</div>
+            <div class="node-file">db/gurumaster_carga.sqlite</div>
+          </div>
+        </div>
+        <div class="node-body">
+          <ul>
+            <li><strong>9 tablas</strong>:</li>
+            <li><span class="tag">vehicles · 5</span><span class="tag">drivers · 5</span><span class="tag">routes · 6</span><span class="tag">trips · 8</span></li>
+            <li><span class="tag">trip_expenses · 32</span><span class="tag">vehicle_documents · 15</span></li>
+            <li><span class="tag">maintenance_events · 11</span><span class="tag">odometer_readings · 12</span><span class="tag">alerts · 12</span></li>
+          </ul>
+        </div>
+        <div class="node-note">Datos operativos estructurados — seed de Mayo 2026</div>
+      </div>
+
+      <!-- OpenAI API -->
+      <div class="node blue">
+        <div class="node-hd">
+          <div class="node-ico">🤖</div>
+          <div class="node-titles">
+            <div class="node-title">OpenAI API <span style="font-size:10px;color:var(--txt-3);font-weight:600">· externo</span></div>
+            <div class="node-file">api.openai.com</div>
+          </div>
+        </div>
+        <div class="node-body">
+          <ul>
+            <li>Modelo: <span class="mono">gpt-4o-mini</span></li>
+            <li>Usado por: Intent Classifier · Text-to-SQL · Response Generator</li>
+          </ul>
+        </div>
+        <div class="node-note">Externo — requiere OPENAI_API_KEY en .env</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

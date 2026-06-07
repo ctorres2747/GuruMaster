@@ -506,6 +506,12 @@ function App() {
           )}
         </div>
 
+        <a href="/architecture" target="_blank" rel="noopener"
+          style={{padding:'5px 10px',border:'1px solid var(--border)',borderRadius:'var(--r-sm)',background:'var(--raised)',color:'var(--ink-2)',marginLeft:6,display:'flex',alignItems:'center',gap:5,textDecoration:'none',fontSize:11,fontWeight:500}}>
+          <Icon name="network" size={13}/>
+          <span>Arquitectura</span>
+        </a>
+
         <button onClick={() => setTweak('darkMode', !tweaks.darkMode)}
           style={{padding:'5px 8px',border:'1px solid var(--border)',borderRadius:'var(--r-sm)',background:'var(--raised)',color:'var(--ink-2)',marginLeft:6,display:'flex',alignItems:'center'}}>
           <Icon name={tweaks.darkMode?'sun':'moon'} size={14}/>

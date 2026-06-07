@@ -43,3 +43,8 @@ def health():
 @app.get("/")
 def serve_frontend():
     return FileResponse(FRONTEND_DIR / "GuruMaster.html")
+
+
+@app.get("/architecture")
+def serve_architecture():
+    return FileResponse(FRONTEND_DIR / "GuruMaster_Architecture.html")
