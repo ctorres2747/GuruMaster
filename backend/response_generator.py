@@ -32,9 +32,19 @@ Pregunta: {pregunta}
 
 Responde de forma concisa y directa. Usa texto plano con listas simples, sin headers markdown ni fórmulas matemáticas."""
 
+_ANSWER_TEMPLATE_CORTO = """Contexto disponible:
+{context}
 
-def generate_response(pregunta: str, context: str) -> str:
-    prompt = _ANSWER_TEMPLATE.format(context=context, pregunta=pregunta)
+Pregunta: {pregunta}
+
+IMPORTANTE: Los datos detallados ya se muestran en el panel central de la aplicación.
+Escribe UNA respuesta corta de máximo 2-3 líneas: resume el hallazgo principal con los números clave y termina con "→ Ver detalle en el panel central."
+Sin listas largas, sin repetir todos los datos."""
+
+
+def generate_response(pregunta: str, context: str, panel_disponible: bool = False) -> str:
+    template = _ANSWER_TEMPLATE_CORTO if panel_disponible else _ANSWER_TEMPLATE
+    prompt = template.format(context=context, pregunta=pregunta)
     resp = _client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[

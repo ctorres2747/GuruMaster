@@ -4,7 +4,7 @@ Cada sección tiene su propio formateador para que el LLM reciba texto
 estructurado y legible, no volcados de dicts.
 """
 
-MAX_CONTEXT_CHARS = 4500
+MAX_CONTEXT_CHARS = 6000
 
 
 def build_context(rag_docs: list[dict], sql_data: dict) -> str:
@@ -44,6 +44,10 @@ def _format_rag(docs: list[dict]) -> str:
 
 def _format_sql(sql_data: dict) -> str:
     sections = []
+
+    # T2SQL va primero: es el dato más específico para la pregunta actual
+    if "query_dinamico" in sql_data:
+        sections.append(_fmt_query_dinamico(sql_data["query_dinamico"]))
 
     if "resumen_financiero" in sql_data:
         sections.append(_fmt_resumen_financiero(sql_data["resumen_financiero"]))
@@ -123,6 +127,15 @@ def _fmt_rentabilidad_vehiculo(r: dict) -> str:
 def _fmt_activos(activos: dict) -> str:
     lines = []
 
+    flota = activos.get("flota") or []
+    if flota:
+        lines.append(f"FLOTA TOTAL ({len(flota)} vehículos):")
+        for v in flota:
+            lines.append(
+                f"  {v.get('placa','')} — {v.get('tipo_vehiculo','')} {v.get('marca','')} "
+                f"{v.get('modelo','')} — Estado: {v.get('estado','')}"
+            )
+
     alerts = activos.get("alertas_sistema") or []
     if alerts:
         lines.append(f"ALERTAS ACTIVAS ({len(alerts)}):")
@@ -137,8 +150,11 @@ def _fmt_activos(activos: dict) -> str:
     if doc_alerts:
         lines.append(f"\nDOCUMENTOS PRÓXIMOS A VENCER ({len(doc_alerts)}):")
         for d in doc_alerts:
-            dias = d.get("dias_restantes", 0)
-            estado_str = "VENCIDO" if dias < 0 else f"vence en {dias} días"
+            dias = d.get("dias_restantes")
+            if dias is None:
+                estado_str = "Sin fecha"
+            else:
+                estado_str = "VENCIDO" if dias < 0 else f"vence en {dias} días"
             lines.append(
                 f"  [{d.get('urgencia','?').upper()}] {d.get('placa','')} — "
                 f"{d.get('tipo_documento','')} — {estado_str} ({d.get('fecha_vencimiento','')})"
@@ -148,8 +164,11 @@ def _fmt_activos(activos: dict) -> str:
     if docs_veh:
         lines.append("\nDOCUMENTOS DEL VEHÍCULO:")
         for d in docs_veh:
-            dias = d.get("dias_restantes", 0)
-            estado_str = "VENCIDO" if dias < 0 else f"{dias} días restantes"
+            dias = d.get("dias_restantes")
+            if dias is None:
+                estado_str = "Sin fecha"
+            else:
+                estado_str = "VENCIDO" if dias < 0 else f"{dias} días restantes"
             lines.append(
                 f"  {d.get('tipo_documento','')} — "
                 f"{d.get('estado','')} — {estado_str}"
@@ -167,3 +186,24 @@ def _fmt_activos(activos: dict) -> str:
             )
 
     return "\n".join(lines) if lines else "Sin datos de activos disponibles."
+
+
+def _fmt_query_dinamico(r: dict) -> str:
+    if r.get("error"):
+        return f"CONSULTA DINÁMICA (error al ejecutar): {r['error']}"
+
+    filas = r.get("filas", [])
+    if not filas:
+        return "CONSULTA DINÁMICA: Sin resultados."
+
+    lines = [f"CONSULTA DINÁMICA ({r.get('total', 0)} filas):"]
+    keys = list(filas[0].keys())
+    lines.append("  " + " | ".join(keys))
+    lines.append("  " + "-" * min(80, len(" | ".join(keys)) + 2))
+    for row in filas[:15]:
+        values = " | ".join(
+            f"{v:,.0f}" if isinstance(v, float) else str(v if v is not None else "—")
+            for v in row.values()
+        )
+        lines.append(f"  {values}")
+    return "\n".join(lines)

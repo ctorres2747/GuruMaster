@@ -1,17 +1,35 @@
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from pathlib import Path
+
+from fastapi import FastAPI, Request
+from fastapi.responses import FileResponse, Response
+from fastapi.staticfiles import StaticFiles
 
 from chat_service import router as chat_router
 from sql_service import router as sql_router
 
+FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
+
 app = FastAPI(title="GuruMaster Carga Colombia", version="0.1.0")
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+
+@app.middleware("http")
+async def cors_everywhere(request: Request, call_next):
+    origin = request.headers.get("origin", "*")
+    if request.method == "OPTIONS":
+        return Response(
+            status_code=204,
+            headers={
+                "Access-Control-Allow-Origin": origin,
+                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+                "Access-Control-Max-Age": "86400",
+            },
+        )
+    response = await call_next(request)
+    response.headers["Access-Control-Allow-Origin"] = origin
+    response.headers["Access-Control-Allow-Headers"] = "*"
+    return response
+
 
 app.include_router(chat_router)
 app.include_router(sql_router)
@@ -20,3 +38,8 @@ app.include_router(sql_router)
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/")
+def serve_frontend():
+    return FileResponse(FRONTEND_DIR / "GuruMaster.html")

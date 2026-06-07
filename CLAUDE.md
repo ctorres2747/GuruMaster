@@ -2,7 +2,7 @@
 
 Copiloto inteligente para el sector transporte de carga en Colombia. Permite consultar normatividad, analizar rentabilidad de viajes, revisar costos operativos y controlar activos de flota usando lenguaje natural.
 
-## Estado actual (actualizado 2026-05-24) — MVP COMPLETO
+## Estado actual (actualizado 2026-06-07) — MVP COMPLETO + MEJORAS POST-MVP
 
 ### ✅ Módulo 1 — RAG documental (COMPLETADO)
 
@@ -186,19 +186,38 @@ El motor orquesta RAG + SQL y conecta todo al endpoint `POST /chat`.
 - RAG: muestra título + % de relevancia por chunk
 - Financiero: resumen narrativo con COP, gastos desglosados por categoría, tabla compacta de viajes
 - Activos: alertas ordenadas por nivel, documentos con días restantes calculados, últimos mantenimientos
-- Trunca a 4,500 chars si el contexto supera el límite
+- T2SQL: resultados de query dinámico van PRIMERO en el contexto para evitar truncado
+- Trunca a 6,000 chars (aumentado de 4,500) si el contexto supera el límite
+
+**Text-to-SQL (`backend/text_to_sql.py`):**
+- GPT-4o-mini genera SELECT queries dinámicas para preguntas analíticas de flota sin `vehiculo_id`
+- Se activa cuando `intencion in ("financiera", "activos", "mixta")` y no hay vehículo específico
+- Seguridad: solo permite SELECT; bloquea INSERT/UPDATE/DELETE/DROP/CREATE/ALTER/ATTACH/PRAGMA
+- El LLM recibe schema completo (columnas exactas via `PRAGMA table_info`) para evitar errores
+- Resultado se agrega a `sql_data["query_dinamico"]` y se incluye en `datos_panel`
+
+**Nuevo campo `datos_panel` en ChatResponse:**
+- Lleva datos estructurados (listas de dicts) al frontend para renderizado en tablas
+- `tipo: "financiero"` → `viajes[]`, `rentabilidad`, `resumen`, `query_dinamico`
+- `tipo: "activos"` → `mantenimientos[]`, `documentos[]`, `alertas[]`, `documentos_por_vencer[]`, `flota[]`
+- Cuando `panel_disponible=True`, el LLM usa un template corto (2-3 líneas + "→ Ver detalle en el panel central")
 
 **Decisiones de diseño del Módulo 4:**
 - Se mantienen 4 intenciones (no se expandió a 9) para el MVP
 - `llantas` se maneja vía intención `activos` → tablas `maintenance_events` + `alerts`
-- El LLM nunca genera SQL; todas las consultas son funciones parametrizadas
-- 2 llamadas LLM por `/chat`: clasificador + generador de respuesta
+- El LLM nunca genera SQL predefinido; T2SQL solo para queries analíticos de flota
+- 2 llamadas LLM por `/chat`: clasificador + generador de respuesta (3 cuando T2SQL activo)
+- `query_vehicle_profitability` filtra gastos por viajes completados (consistencia con ingresos)
 
-### ✅ Módulo 5 — Frontend (COMPLETADO)
+### ✅ Módulo 5 — Frontend (COMPLETADO + ACTUALIZADO)
 
-**Archivo:** `frontend/GuruMaster.html` — single-file React 18 (CDN + Babel Standalone, funciona con `file://`), ~420 líneas.
+**Archivo:** `frontend/GuruMaster.html` — single-file React 18 (CDN + Babel Standalone).
 
-**Para abrir:** doble clic en `frontend/GuruMaster.html` o arrastrar al navegador. El backend debe estar corriendo en `http://localhost:8000`.
+**Para abrir:** doble clic en `iniciar_gurumaster.bat` — levanta el backend y abre `http://localhost:8000` en el navegador. El frontend se sirve directamente desde FastAPI (sin CORS, misma origin).
+
+**Arranque:**
+- `iniciar_gurumaster.bat` — mata cualquier proceso en puerto 8000, arranca uvicorn, abre navegador
+- Backend sirve el HTML en `GET /` vía `FileResponse(FRONTEND_DIR / "GuruMaster.html")`
 
 **Layout — 3 paneles:**
 
@@ -223,9 +242,13 @@ El motor orquesta RAG + SQL y conecta todo al endpoint `POST /chat`.
 - 3 chips de sugerencias rápidas en el footer (primeras 3 de SUGGESTIONS)
 
 **Panel central — 3 tabs (se cambia automáticamente según intención de la respuesta):**
-- **Evidencia** (activa para `normativa`): muestra fuentes documentales del campo `fuentes[]` donde `tipo === "documento"` — título, pilar y primeros 300 chars del contenido
-- **Financiero** (activa para `financiera`/`mixta` con métricas): 4 metric-cards (Ingresos / Gastos / Utilidad / Margen) del campo `metricas` + lista de `datos_consultados`
-- **Activos** (activa para `activos`): vehículo seleccionado si aplica + lista completa de alertas cargadas de `GET /api/vehicles/alerts?days=30`
+- **Evidencia** (activa para `normativa`): fuentes documentales del campo `fuentes[]` — título, pilar, primeros 300 chars del contenido
+- **Financiero** (activa para `financiera`/`mixta`): 4 KPI cards (Ingresos/Gastos/Utilidad/Margen) + tabla de viajes con columnas fecha/placa/ruta/ingreso/estado + tabla T2SQL (query dinámico) con headers generados automáticamente desde las columnas del resultado
+- **Activos** (activa para `activos`): tabla de historial de mantenimientos + tabla de documentos con badges de días (colores por urgencia: rojo=vencido/critico, naranja=urgente, amarillo=proximo, verde=vigente) + tabla de docs próximos a vencer de toda la flota; fallback a alertas genéricas si no hay `datos_panel`
+
+**Filosofía UI (split chat/panel):**
+- Chat (izquierdo): respuesta LLM corta de 2-3 líneas con número clave + "→ Ver detalle en el panel central"
+- Panel central: datos estructurados completos en tablas, renderizados directamente desde `datos_panel` sin pasar por el LLM
 
 **Panel derecho:**
 - KPI rows de la última respuesta con métricas (colores: teal=ingresos, rojo=gastos, verde/rojo según signo para utilidad y margen)
@@ -245,13 +268,15 @@ El motor orquesta RAG + SQL y conecta todo al endpoint `POST /chat`.
 **Decisiones de diseño del Módulo 5:**
 - No hay datos mock — todo viene del backend real (si el backend está offline, muestra error en burbuja con instrucciones de arranque)
 - No hay selector de pilar — la IA clasifica la intención automáticamente
-- La placa del selector se incluye como `filtros.vehiculo_id` en el payload de `/chat`; la placa extraída por el LLM del texto de la pregunta tiene menor prioridad que el filtro explícito (comportamiento heredado del backend)
+- La placa del selector se incluye como `filtros.vehiculo_id` en el payload de `/chat`; la placa extraída por el LLM del texto de la pregunta tiene menor prioridad que el filtro explícito
 - El tab activo del panel central cambia automáticamente según `intencion` de la respuesta
-- El campo `fuentes[].contenido` viene truncado a 300 chars desde `chat_service.py` (suficiente para preview en la UI)
+- El campo `fuentes[].contenido` viene truncado a 300 chars desde `chat_service.py`
+- Frontend servido desde FastAPI (mismo origen) — no se abre como `file://`; eliminado el problema de CORS con `null` origin
 
 ### Frontend MVP
 
-- `frontend/GuruMaster.html` — Dashboard React single-file adaptado a transporte de carga Colombia. Conectado al backend real (`POST /chat`). Ver sección Módulo 5 para detalle completo.
+- `frontend/GuruMaster.html` — Dashboard React single-file. Servido por FastAPI en `GET /`. Chat muestra resumen corto; panel central muestra tablas detalladas desde `datos_panel`.
+- `iniciar_gurumaster.bat` — Script de arranque único: mata proceso en :8000, lanza uvicorn, abre navegador.
 
 ## Producto
 
@@ -407,16 +432,17 @@ Adaptar el frontend actual (activos industriales → vehículos/rutas):
 ## Archivos relevantes
 
 **Backend — Motor de consulta (Módulo 4):**
-- `backend/schemas.py` — Pydantic: `ChatRequest(pregunta, usuario, filtros)`, `ChatResponse(respuesta, intencion, confianza, fuentes, datos_consultados, metricas, advertencias)`
+- `backend/schemas.py` — Pydantic: `ChatRequest`, `ChatResponse` (incluye `datos_panel: Optional[dict]`), `Filtros`, `Metricas`, `SourceReference`
 - `backend/intent_classifier.py` — `classify_intent(msg) → (str, float, dict)`: LLM-based, extrae placa + fechas, fallback a keywords
-- `backend/context_builder.py` — `build_context(rag_docs, sql_data) → str`: formateadores específicos por tipo de dato
-- `backend/response_generator.py` — `generate_response(pregunta, context) → str`: llamada a GPT-4o-mini con system prompt de GuruMaster Carga
+- `backend/context_builder.py` — `build_context(rag_docs, sql_data) → str`: T2SQL primero, límite 6,000 chars
+- `backend/response_generator.py` — `generate_response(pregunta, context, panel_disponible) → str`: template corto cuando hay panel
 - `backend/guardrails.py` — `check(...) → list[str]`: advertencias por ausencia de fuentes o datos
-- `backend/chat_service.py` — orquestador principal, `POST /chat`, resuelve placa→vehiculo_id automáticamente
+- `backend/chat_service.py` — orquestador: clasificador → RAG → SQL → T2SQL → datos_panel → LLM
+- `backend/text_to_sql.py` — `run_text_to_sql(pregunta) → dict`: GPT-4o-mini genera SELECT; solo para queries de flota sin vehiculo_id; bloquea comandos peligrosos
 
 **Backend — Datos estructurados (Módulos 2 y 3):**
-- `backend/main.py` — FastAPI app, arrancar con `uvicorn main:app --reload` desde `/backend`
-- `backend/sql_service.py` — todas las consultas SQLite; funciones para chat: `query_trips_filtered`, `query_gastos_filtered`, `query_activos_context`, `query_vehicle_id_by_placa`
+- `backend/main.py` — FastAPI app; sirve frontend en `GET /` vía FileResponse; CORS middleware que hace echo del origin (maneja `null`); `uvicorn main:app --port 8000` desde `/backend`
+- `backend/sql_service.py` — todas las consultas SQLite; `query_vehicle_profitability` filtra gastos por viajes completados
 - `backend/init_db.py` — crea schema y carga todos los CSVs de seed data
 
 **Backend — RAG (Módulo 1):**
@@ -456,3 +482,25 @@ Adaptar el frontend actual (activos industriales → vehículos/rutas):
 - Las respuestas documentales deben mostrar fuentes ("no encontré evidencia" si no hay soporte).
 - El LLM no debe inventar normatividad — siempre responder con evidencia o declarar ausencia.
 - Priorizar los 4 escenarios comerciales antes de intentar cubrir más casos de uso.
+
+## Bugs corregidos (sesión 2026-06-07)
+
+| Bug | Causa raíz | Fix |
+|---|---|---|
+| Métricas inconsistentes (LLM decía -$3.15M, UI mostraba +$7M) | `query_vehicle_profitability` filtraba ingresos por viajes completados pero gastos de todos los viajes | Agregar `JOIN trips t ON e.viaje_id = t.viaje_id WHERE t.estado_viaje = 'Completado'` en el query de gastos |
+| Flota mostraba 3 vehículos en lugar de 5 | `query_activos_context` sin `vehiculo_id` solo retornaba alertas (3 vehículos con alertas) | Agregar `flota = query_vehicles()` al contexto de activos cuando no hay vehículo específico |
+| CORS bloqueado desde `file://` | `file://` envía `Origin: null`; el header `Access-Control-Allow-Origin: *` Chrome lo rechaza para null origin | Middleware custom que hace echo del origin recibido (incluyendo `null`) |
+| Error 500 en mantenimiento de ABC123 | `dias_restantes` puede ser `None` para documentos sin fecha; `dias < 0` lanzaba `TypeError` | Guard `if dias is None: estado_str = "Sin fecha"` en `context_builder.py` |
+| T2SQL truncado en intención mixta | Con límite 4,500 chars y contexto RAG + activos + financiero, el bloque T2SQL quedaba fuera | Mover T2SQL a primera posición en `_format_sql()` + subir límite a 6,000 |
+| Puerto 8000 ya en uso al relanzar | Proceso anterior seguía corriendo | `iniciar_gurumaster.bat` mata el proceso en :8000 antes de arrancar |
+
+## Próximos pasos — Mejoras visuales (prioridad alta)
+
+El MVP está funcional. La siguiente iteración debe continuar mejorando la salida visual de respuestas:
+
+1. **Panel central — Financiero:** agregar gráfico de barras (recharts o Chart.js CDN) para gastos por categoría del vehículo
+2. **Panel central — Activos:** mostrar odómetro del vehículo activo + próximo mantenimiento por km
+3. **Panel central — T2SQL:** mejorar renderizado de tablas dinámicas (formatear moneda automáticamente cuando la columna contiene "valor", "ingreso", "gasto", "total")
+4. **Chat:** agregar indicador visual del tipo de consulta que está procesando ("Consultando documentos... / Analizando datos SQL... / Generando respuesta...")
+5. **RAG — gestion_activos:** agregar documentos (guías SOAT, tecnomecánica, pólizas) para mejorar respuestas en preguntas de activos
+6. **Panel derecho:** agregar mini-chart de tendencia de margen (últimos 30 días) usando datos de `GET /api/analytics/monthly-summary`

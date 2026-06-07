@@ -183,7 +183,8 @@ def query_vehicle_profitability(vehiculo_id: str) -> dict:
     expenses = conn.execute(
         "SELECT e.tipo_gasto, SUM(e.valor) as total "
         "FROM trip_expenses e JOIN trips t ON e.viaje_id = t.viaje_id "
-        "WHERE t.vehiculo_id = ? GROUP BY e.tipo_gasto ORDER BY total DESC",
+        "WHERE t.vehiculo_id = ? AND t.estado_viaje = 'Completado' "
+        "GROUP BY e.tipo_gasto ORDER BY total DESC",
         [vehiculo_id],
     ).fetchall()
     maintenance_cost = conn.execute(
@@ -371,7 +372,9 @@ def query_activos_context(vehiculo_id: str | None = None) -> dict:
             "ultimos_mantenimientos": maintenance,
         }
 
+    vehicles = query_vehicles()
     return {
+        "flota": vehicles,
         "alertas_sistema": alerts[:10],
         "documentos_por_vencer": doc_alerts[:10],
     }

@@ -36,3 +36,4 @@ class ChatResponse(BaseModel):
     datos_consultados: list[dict]
     metricas: Optional[Metricas] = None
     advertencias: list[str]
+    datos_panel: Optional[dict] = None  # datos estructurados para el panel central

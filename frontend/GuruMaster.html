@@ -173,6 +173,21 @@ button { cursor: pointer; font-family: var(--font); }
 .tab.act { color:var(--teal); border-bottom-color:var(--teal); }
 .tab:hover:not(.act) { color:var(--ink-2); }
 
+/* Panel tables */
+.dtable { width:100%; border-collapse:collapse; font-size:11px; margin-top:8px; }
+.dtable th { background:var(--raised); color:var(--ink-2); font-weight:600; text-align:left; padding:6px 8px; border-bottom:1px solid var(--border); text-transform:uppercase; letter-spacing:.04em; font-size:10px; white-space:nowrap; }
+.dtable td { padding:6px 8px; border-bottom:1px solid var(--border); color:var(--ink-1); vertical-align:top; }
+.dtable tr:last-child td { border-bottom:none; }
+.dtable tr:hover td { background:var(--raised); }
+.badge-nivel { display:inline-block; padding:2px 6px; border-radius:4px; font-size:9.5px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; }
+.badge-nivel.critica,.badge-nivel.vencido { background:#FEE2E2; color:#DC2626; }
+.badge-nivel.alta,.badge-nivel.urgente   { background:#FFEDD5; color:#EA580C; }
+.badge-nivel.media,.badge-nivel.proximo  { background:#FEF9C3; color:#CA8A04; }
+.badge-nivel.baja                        { background:#DCFCE7; color:#16A34A; }
+.badge-nivel.vigente                     { background:#DCFCE7; color:#16A34A; }
+.t2sql-box { background:var(--raised); border:1px solid var(--border); border-radius:var(--r-md); padding:10px 12px; margin-bottom:10px; }
+.t2sql-sql { font-family:var(--mono); font-size:9.5px; color:var(--ink-3); margin-top:4px; white-space:pre-wrap; word-break:break-all; }
+
 /* Evidence */
 .ev-card { background:var(--raised); border:1px solid var(--border); border-radius:var(--r-md); padding:12px; margin-bottom:10px; }
 .ev-hd { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; margin-bottom:6px; }
@@ -582,55 +597,134 @@ function App() {
                   </>
             )}
 
-            {activeTab === 'financiero' && (
-              !metricas
+            {activeTab === 'financiero' && (() => {
+              const dp = lastResp?.datos_panel;
+              const viajes = dp?.viajes || [];
+              const rent = dp?.rentabilidad;
+              const t2sql = dp?.query_dinamico;
+              return !metricas && !viajes.length && !t2sql
                 ? <div className="empty-state"><div className="empty-ico">💰</div><div className="empty-title">Sin datos financieros</div><div className="empty-sub">Pregunta por rentabilidad de un viaje o costos del mes.</div></div>
                 : <>
-                    <div className="sec-lbl">Resumen financiero</div>
-                    <div className="metrics-grid">
-                      <div className="metric-card"><div className="metric-lbl">Ingresos</div><div className="metric-val mv-acc">{fmtCOP(metricas.ingreso)}</div></div>
-                      <div className="metric-card"><div className="metric-lbl">Gastos</div><div className="metric-val mv-neg">{fmtCOP(metricas.gastos)}</div></div>
-                      <div className="metric-card"><div className="metric-lbl">Utilidad neta</div><div className={`metric-val ${metricas.utilidad>=0?'mv-pos':'mv-neg'}`}>{fmtCOP(metricas.utilidad)}</div></div>
-                      <div className="metric-card"><div className="metric-lbl">Margen</div><div className={`metric-val ${metricas.margen_pct>=0?'mv-pos':'mv-neg'}`}>{metricas.margen_pct}%</div></div>
-                    </div>
-                    {(lastResp?.datos_consultados||[]).map((d,i) => (
-                      <div key={i} className="sql-tag"><Icon name="database" size={10}/>{d.nombre}</div>
-                    ))}
-                  </>
-            )}
+                    {metricas && <>
+                      <div className="sec-lbl">Resumen financiero</div>
+                      <div className="metrics-grid">
+                        <div className="metric-card"><div className="metric-lbl">Ingresos</div><div className="metric-val mv-acc">{fmtCOP(metricas.ingreso)}</div></div>
+                        <div className="metric-card"><div className="metric-lbl">Gastos</div><div className="metric-val mv-neg">{fmtCOP(metricas.gastos)}</div></div>
+                        <div className="metric-card"><div className="metric-lbl">Utilidad</div><div className={`metric-val ${metricas.utilidad>=0?'mv-pos':'mv-neg'}`}>{fmtCOP(metricas.utilidad)}</div></div>
+                        <div className="metric-card"><div className="metric-lbl">Margen</div><div className={`metric-val ${metricas.margen_pct>=0?'mv-pos':'mv-neg'}`}>{metricas.margen_pct}%</div></div>
+                      </div>
+                    </>}
+                    {t2sql?.filas?.length > 0 && <>
+                      <div className="sec-lbl" style={{marginTop:12}}>Resultado de consulta</div>
+                      <div className="t2sql-box">
+                        <div className="t2sql-sql">{t2sql.sql}</div>
+                        <table className="dtable" style={{marginTop:8}}>
+                          <thead><tr>{Object.keys(t2sql.filas[0]).map(k=><th key={k}>{k}</th>)}</tr></thead>
+                          <tbody>{t2sql.filas.map((row,i)=><tr key={i}>{Object.values(row).map((v,j)=><td key={j}>{typeof v==='number'&&v>10000?fmtCOP(v):String(v??'—')}</td>)}</tr>)}</tbody>
+                        </table>
+                      </div>
+                    </>}
+                    {viajes.length > 0 && <>
+                      <div className="sec-lbl" style={{marginTop:12}}>Viajes ({viajes.length})</div>
+                      <table className="dtable">
+                        <thead><tr><th>Fecha</th><th>Vehículo</th><th>Ruta</th><th>Ingreso</th><th>Estado</th></tr></thead>
+                        <tbody>{viajes.map((v,i)=>(
+                          <tr key={i}>
+                            <td>{v.fecha_viaje}</td>
+                            <td style={{fontFamily:'var(--mono)',fontWeight:600}}>{v.vehiculo_id}</td>
+                            <td>{v.ciudad_origen&&v.ciudad_destino?`${v.ciudad_origen}→${v.ciudad_destino}`:v.ruta_id||'—'}</td>
+                            <td style={{color:'var(--teal-text)',fontWeight:600}}>{fmtCOP(v.ingreso)}</td>
+                            <td><span className={`badge-nivel ${v.estado_viaje==='Completado'?'vigente':'media'}`}>{v.estado_viaje}</span></td>
+                          </tr>
+                        ))}</tbody>
+                      </table>
+                    </>}
+                  </>;
+            })()}
 
-            {activeTab === 'activos' && (
-              <>
-                {selVeh && (
-                  <>
-                    <div className="sec-lbl">Vehículo seleccionado</div>
-                    <div className="veh-card">
-                      <div className="veh-placa">{selVeh.placa}</div>
-                      <div style={{display:'flex',justifyContent:'space-between',fontSize:11,color:'var(--ink-2)'}}>
-                        <span>{selVeh.tipo}</span><span>{selVeh.marca}</span>
-                      </div>
-                    </div>
-                  </>
-                )}
-                <div className="sec-lbl">Alertas próximos 30 días ({alerts.length})</div>
-                {alerts.length === 0
-                  ? <div style={{fontSize:12,color:'var(--ink-3)'}}>Sin alertas activas.</div>
-                  : alerts.slice(0,20).map((a,i) => (
-                      <div key={i} className={`alert-item al-${a.urgencia}`}>
-                        <div className={`al-dot dot-${a.urgencia}`}/>
-                        <div>
-                          <div style={{display:'flex',gap:6,alignItems:'center',marginBottom:2}}>
-                            <span className="al-placa">{a.placa}</span>
-                            <span style={{fontSize:9.5,textTransform:'uppercase',color:'var(--ink-3)',letterSpacing:'.04em'}}>{a.urgencia}</span>
+            {activeTab === 'activos' && (() => {
+              const dp = lastResp?.datos_panel;
+              const mants = dp?.mantenimientos || [];
+              const docs  = dp?.documentos    || [];
+              const docVencer = dp?.documentos_por_vencer || [];
+              const alertas = dp?.alertas     || [];
+              const flota   = dp?.flota       || [];
+              const hasPanelData = dp?.tipo === 'activos';
+
+              return <>
+                {hasPanelData && mants.length > 0 && <>
+                  <div className="sec-lbl">Historial de mantenimiento ({mants.length})</div>
+                  <table className="dtable">
+                    <thead><tr><th>Fecha</th><th>Tipo</th><th>Categoría</th><th>Valor</th><th>Proveedor</th></tr></thead>
+                    <tbody>{mants.map((m,i)=>(
+                      <tr key={i}>
+                        <td style={{whiteSpace:'nowrap'}}>{m.fecha_mantenimiento}</td>
+                        <td><span className={`badge-nivel ${m.tipo_mantenimiento==='Preventivo'?'vigente':'alta'}`}>{m.tipo_mantenimiento}</span></td>
+                        <td>{m.categoria_mantenimiento}</td>
+                        <td style={{color:'var(--ink-2)',fontWeight:600}}>{fmtCOP(m.valor)}</td>
+                        <td style={{color:'var(--ink-3)'}}>{m.proveedor||'—'}</td>
+                      </tr>
+                    ))}</tbody>
+                  </table>
+                </>}
+
+                {hasPanelData && docs.length > 0 && <>
+                  <div className="sec-lbl" style={{marginTop:12}}>Documentos del vehículo ({docs.length})</div>
+                  <table className="dtable">
+                    <thead><tr><th>Documento</th><th>Estado</th><th>Vencimiento</th><th>Días</th></tr></thead>
+                    <tbody>{docs.map((d,i)=>{
+                      const dias = d.dias_restantes;
+                      const urg = dias==null?'baja':dias<0?'vencido':dias<=7?'critica':dias<=15?'urgente':dias<=30?'proximo':'vigente';
+                      return <tr key={i}>
+                        <td>{d.tipo_documento}</td>
+                        <td><span className={`badge-nivel ${urg}`}>{d.estado}</span></td>
+                        <td style={{whiteSpace:'nowrap'}}>{d.fecha_vencimiento||'—'}</td>
+                        <td style={{color:dias<0?'var(--danger)':dias<=30?'var(--warn)':'var(--ink-2)',fontWeight:600}}>
+                          {dias==null?'—':dias<0?`Vencido ${Math.abs(dias)}d`:`${dias}d`}
+                        </td>
+                      </tr>;
+                    })}</tbody>
+                  </table>
+                </>}
+
+                {hasPanelData && docVencer.length > 0 && <>
+                  <div className="sec-lbl" style={{marginTop:12}}>Documentos por vencer — flota ({docVencer.length})</div>
+                  <table className="dtable">
+                    <thead><tr><th>Placa</th><th>Documento</th><th>Urgencia</th><th>Vencimiento</th></tr></thead>
+                    <tbody>{docVencer.map((d,i)=>(
+                      <tr key={i}>
+                        <td style={{fontFamily:'var(--mono)',fontWeight:600}}>{d.placa}</td>
+                        <td>{d.tipo_documento}</td>
+                        <td><span className={`badge-nivel ${d.urgencia}`}>{d.urgencia}</span></td>
+                        <td style={{whiteSpace:'nowrap',color:d.dias_restantes<0?'var(--danger)':'var(--ink-2)'}}>
+                          {d.dias_restantes<0?`Vencido hace ${Math.abs(d.dias_restantes)}d`:`${d.dias_restantes}d (${d.fecha_vencimiento})`}
+                        </td>
+                      </tr>
+                    ))}</tbody>
+                  </table>
+                </>}
+
+                {!hasPanelData && <>
+                  <div className="sec-lbl">Alertas próximos 30 días ({alerts.length})</div>
+                  {alerts.length === 0
+                    ? <div style={{fontSize:12,color:'var(--ink-3)'}}>Sin alertas activas.</div>
+                    : alerts.slice(0,20).map((a,i) => (
+                        <div key={i} className={`alert-item al-${a.urgencia}`}>
+                          <div className={`al-dot dot-${a.urgencia}`}/>
+                          <div>
+                            <div style={{display:'flex',gap:6,alignItems:'center',marginBottom:2}}>
+                              <span className="al-placa">{a.placa}</span>
+                              <span style={{fontSize:9.5,textTransform:'uppercase',color:'var(--ink-3)',letterSpacing:'.04em'}}>{a.urgencia}</span>
+                            </div>
+                            <div className="al-tipo">{a.tipo_documento}</div>
+                            <div className="al-dias">{a.dias_restantes<0?`Vencido hace ${Math.abs(a.dias_restantes)} dias`:`Vence en ${a.dias_restantes} dias (${a.fecha_vencimiento})`}</div>
                           </div>
-                          <div className="al-tipo">{a.tipo_documento}</div>
-                          <div className="al-dias">{a.dias_restantes<0?`Vencido hace ${Math.abs(a.dias_restantes)} dias`:`Vence en ${a.dias_restantes} dias (${a.fecha_vencimiento})`}</div>
                         </div>
-                      </div>
-                    ))
-                }
-              </>
-            )}
+                      ))
+                  }
+                </>}
+              </>;
+            })()}
 
           </div>
         </div>

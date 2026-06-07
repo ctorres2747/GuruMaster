@@ -13,6 +13,7 @@ from sql_service import (
     query_vehicle_id_by_placa,
     query_vehicle_profitability,
 )
+from text_to_sql import run_text_to_sql
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -61,25 +62,34 @@ def chat(req: ChatRequest):
     # --- SQL financiero ---
     if intencion in ("financiera", "mixta"):
         trips = query_trips_filtered(vehiculo_id, fecha_inicio, fecha_fin)
-        gastos = query_gastos_filtered(vehiculo_id, fecha_inicio, fecha_fin)
         sql_data["viajes"] = trips
-        sql_data["resumen_financiero"] = gastos
         datos_consultados.append({"tipo": "sql", "nombre": "trips + trip_expenses"})
         fuentes.append(SourceReference(tipo="sql", nombre="trips + trip_expenses"))
 
         if vehiculo_id:
+            # Consulta por vehículo específico: usar veh_prof como fuente única
+            # (income y expenses filtrados por viajes completados — consistente)
             veh_prof = query_vehicle_profitability(vehiculo_id)
             if veh_prof:
                 sql_data["rentabilidad_vehiculo"] = veh_prof
                 datos_consultados.append({"tipo": "sql", "nombre": "rentabilidad_vehiculo"})
-
-        if gastos["ingresos"] > 0:
-            metricas = Metricas(
-                ingreso=gastos["ingresos"],
-                gastos=gastos["total_gastos"],
-                utilidad=gastos["utilidad"],
-                margen_pct=gastos["margen_pct"],
-            )
+                metricas = Metricas(
+                    ingreso=veh_prof["ingresos_brutos"],
+                    gastos=veh_prof["gastos_total"],
+                    utilidad=veh_prof["utilidad"],
+                    margen_pct=veh_prof["margen_pct"],
+                )
+        else:
+            # Consulta de flota general: usar resumen financiero agregado
+            gastos = query_gastos_filtered(vehiculo_id, fecha_inicio, fecha_fin)
+            sql_data["resumen_financiero"] = gastos
+            if gastos["ingresos"] > 0:
+                metricas = Metricas(
+                    ingreso=gastos["ingresos"],
+                    gastos=gastos["total_gastos"],
+                    utilidad=gastos["utilidad"],
+                    margen_pct=gastos["margen_pct"],
+                )
 
     # --- SQL activos ---
     if intencion in ("activos", "mixta"):
@@ -88,9 +98,45 @@ def chat(req: ChatRequest):
         datos_consultados.append({"tipo": "sql", "nombre": "alerts + vehicle_documents + maintenance_events"})
         fuentes.append(SourceReference(tipo="sql", nombre="gestión de activos"))
 
+    # --- Text-to-SQL dinámico ---
+    # Se activa cuando la pregunta es de flota general (sin vehículo específico)
+    # o cuando la intención es mixta — complementa los queries predefinidos.
+    usar_t2sql = intencion in ("financiera", "activos", "mixta") and not vehiculo_id
+    if usar_t2sql:
+        t2sql = run_text_to_sql(req.pregunta)
+        if t2sql and t2sql.get("filas"):
+            sql_data["query_dinamico"] = t2sql
+            datos_consultados.append({"tipo": "sql_dinamico", "nombre": "text-to-sql"})
+
+    # --- Construir datos_panel para el panel central ---
+    datos_panel: dict | None = None
+
+    if intencion == "activos" and sql_data.get("activos"):
+        a = sql_data["activos"]
+        datos_panel = {
+            "tipo": "activos",
+            "vehiculo_id": vehiculo_id,
+            "mantenimientos": a.get("ultimos_mantenimientos") or [],
+            "documentos": a.get("documentos_vehiculo") or [],
+            "alertas": a.get("alertas_sistema") or [],
+            "documentos_por_vencer": a.get("documentos_por_vencer") or [],
+            "flota": a.get("flota") or [],
+        }
+    elif intencion in ("financiera", "mixta"):
+        datos_panel = {
+            "tipo": "financiero",
+            "vehiculo_id": vehiculo_id,
+            "viajes": sql_data.get("viajes") or [],
+            "rentabilidad": sql_data.get("rentabilidad_vehiculo"),
+            "resumen": sql_data.get("resumen_financiero"),
+            "query_dinamico": sql_data.get("query_dinamico"),
+        }
+
+    panel_disponible = datos_panel is not None and bool(sql_data)
+
     # --- Contexto + respuesta ---
     context = build_context(rag_docs, sql_data)
-    respuesta = generate_response(req.pregunta, context)
+    respuesta = generate_response(req.pregunta, context, panel_disponible=panel_disponible)
 
     advertencias = check(respuesta, intencion, has_rag_sources=bool(rag_docs), has_sql_data=bool(sql_data))
 
@@ -102,4 +148,5 @@ def chat(req: ChatRequest):
         datos_consultados=datos_consultados,
         metricas=metricas,
         advertencias=advertencias,
+        datos_panel=datos_panel,
     )
