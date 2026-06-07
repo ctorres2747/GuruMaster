@@ -11,24 +11,25 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg:        #14142a;
-  --bg-grid:   #1c1c3a;
-  --panel:     #1e1e3f;
-  --panel-2:   #252548;
-  --line:      #3a3a6a;
-  --line-soft: #2c2c52;
+  /* ── base — mismo sistema de diseño que GuruMaster.html ── */
+  --bg:        #F5F6F8;
+  --bg-grid:   #FFFFFF;
+  --panel:     #FFFFFF;
+  --panel-2:   #F0F2F5;
+  --line:      #E2E6EC;
+  --line-soft: #EDF0F4;
 
-  --txt-1:  #ececff;
-  --txt-2:  #a8a8d8;
-  --txt-3:  #6e6ea0;
+  --txt-1:  #111827;
+  --txt-2:  #4B5563;
+  --txt-3:  #9CA3AF;
 
-  /* component colors */
-  --blue:   #4a9eff;   --blue-bg:   rgba(74,158,255,.12);   --blue-br:   rgba(74,158,255,.4);
-  --green:  #34d399;   --green-bg:  rgba(52,211,153,.12);   --green-br:  rgba(52,211,153,.4);
-  --orange: #fb923c;   --orange-bg: rgba(251,146,60,.12);   --orange-br: rgba(251,146,60,.4);
-  --purple: #a78bfa;   --purple-bg: rgba(167,139,250,.12);  --purple-br: rgba(167,139,250,.4);
-  --gray:   #94a3b8;   --gray-bg:   rgba(148,163,184,.1);   --gray-br:   rgba(148,163,184,.35);
-  --red:    #f87171;
+  /* component colors — alineados con la paleta del frontend */
+  --blue:   #0D7F6E;   --blue-bg:   #EBF7F5;   --blue-br:   #A7D9D2;   /* IA / LLM — teal primario */
+  --green:  #059669;   --green-bg:  #D1FAE5;   --green-br:  #6EE7B7;   /* Almacén de datos */
+  --orange: #D97706;   --orange-bg: #FEF3C7;   --orange-br: #FCD34D;   /* API / Routing */
+  --purple: #2563EB;   --purple-bg: #DBEAFE;   --purple-br: #93C5FD;   /* Frontend / UI */
+  --gray:   #6B7280;   --gray-bg:   #F3F4F6;   --gray-br:   #D1D5DB;   /* Utilidades */
+  --red:    #DC2626;
 
   --mono: 'IBM Plex Mono', monospace;
   --sans: 'Inter', sans-serif;
@@ -37,8 +38,8 @@
 body {
   font-family: var(--sans);
   background:
-    radial-gradient(circle at 20% 0%, #1a1a38 0%, transparent 50%),
-    radial-gradient(circle at 80% 100%, #1a2a3a 0%, transparent 50%),
+    radial-gradient(circle at 15% 0%, rgba(167,215,210,.35) 0%, transparent 45%),
+    radial-gradient(circle at 85% 100%, rgba(219,234,254,.4) 0%, transparent 45%),
     var(--bg);
   background-attachment: fixed;
   color: var(--txt-1);
@@ -61,7 +62,7 @@ body {
   flex-wrap: wrap; gap: 16px;
 }
 .title-bar h1 { font-size: 28px; font-weight: 800; letter-spacing: -.02em; }
-.title-bar h1 .accent { color: var(--green); }
+.title-bar h1 .accent { color: var(--blue); }
 .title-bar .sub { font-size: 13px; color: var(--txt-2); margin-top: 6px; font-family: var(--mono); }
 .title-bar .meta { text-align: right; font-size: 11px; color: var(--txt-3); font-family: var(--mono); line-height: 1.7; }
 
@@ -92,7 +93,7 @@ body {
 .node {
   background: var(--panel); border: 1px solid var(--line);
   border-radius: 14px; overflow: hidden;
-  box-shadow: 0 4px 20px rgba(0,0,0,.25);
+  box-shadow: 0 2px 12px rgba(0,0,0,.07), 0 1px 3px rgba(0,0,0,.04);
   position: relative;
 }
 .node::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; }
@@ -141,11 +142,11 @@ body {
   display: flex; gap: 8px; align-items: flex-start;
 }
 .node-note::before { content: '✦'; font-style: normal; flex-shrink: 0; opacity: .7; }
-.node.blue   .node-note { background: var(--blue-bg);   color: #bcd9ff; }
-.node.green  .node-note { background: var(--green-bg);  color: #a7f0d4; }
-.node.orange .node-note { background: var(--orange-bg); color: #ffd4ad; }
-.node.purple .node-note { background: var(--purple-bg); color: #d6c9ff; }
-.node.gray   .node-note { background: var(--gray-bg);   color: #cfd8e3; }
+.node.blue   .node-note { background: var(--blue-bg);   color: #0A6558; }
+.node.green  .node-note { background: var(--green-bg);  color: #065F46; }
+.node.orange .node-note { background: var(--orange-bg); color: #92400E; }
+.node.purple .node-note { background: var(--purple-bg); color: #1D4ED8; }
+.node.gray   .node-note { background: var(--gray-bg);   color: #374151; }
 
 /* ── Arrows / connectors ── */
 .flow-arrow {
@@ -176,7 +177,7 @@ body {
 /* ── Orchestrator group ── */
 .orchestrator {
   border: 2px dashed var(--blue-br); border-radius: 18px;
-  padding: 16px; background: rgba(74,158,255,.04);
+  padding: 16px; background: rgba(13,127,110,.03);
   position: relative;
 }
 .orchestrator-tag {
@@ -214,7 +215,7 @@ body {
 .chatresp .cr-fields { display: flex; gap: 6px; flex-wrap: wrap; }
 .chatresp .cr-field {
   font-family: var(--mono); font-size: 11px; padding: 3px 9px; border-radius: 6px;
-  background: var(--orange-bg); border: 1px solid var(--orange-br); color: #ffd4ad;
+  background: var(--orange-bg); border: 1px solid var(--orange-br); color: #92400E;
 }
 
 /* callout note bar */
@@ -225,7 +226,7 @@ body {
   border-radius: 12px; margin: 22px 0;
 }
 .callout .ic { font-size: 20px; }
-.callout .tx { font-size: 13px; color: #cfe2ff; line-height: 1.5; }
+.callout .tx { font-size: 13px; color: var(--txt-2); line-height: 1.5; }
 .callout .tx b { color: var(--txt-1); font-weight: 700; }
 .callout .cost { font-family: var(--mono); color: var(--green); font-weight: 600; }
 

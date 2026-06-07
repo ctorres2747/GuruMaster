@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GuruMaster Carga Colombia — Diagramas C4</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* Mismo sistema de diseño que GuruMaster.html */
+:root {
+  --bg:          #F5F6F8;
+  --surface:     #FFFFFF;
+  --raised:      #F0F2F5;
+  --border:      #E2E6EC;
+  --border-plus: #CBD2DA;
+  --teal:        #0D7F6E;
+  --teal-bg:     #EBF7F5;
+  --teal-border: #A7D9D2;
+  --teal-text:   #0A6558;
+  --ink-1:       #111827;
+  --ink-2:       #4B5563;
+  --ink-3:       #9CA3AF;
+  --info:        #2563EB;
+  --info-bg:     #DBEAFE;
+  --info-border: #93C5FD;
+  --warn:        #D97706;
+  --warn-bg:     #FEF3C7;
+  --font: 'Inter', -apple-system, sans-serif;
+  --mono: 'IBM Plex Mono', monospace;
+}
+
+html, body { min-height: 100%; }
+body {
+  font-family: var(--font);
+  background:
+    radial-gradient(circle at 15% 0%, rgba(167,215,210,.35) 0%, transparent 45%),
+    radial-gradient(circle at 85% 100%, rgba(219,234,254,.4) 0%, transparent 45%),
+    var(--bg);
+  background-attachment: fixed;
+  color: var(--ink-1);
+  padding: 32px;
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border-plus); border-radius: 4px; }
+
+.canvas { max-width: 1200px; margin: 0 auto; }
+
+/* ── Title ── */
+.title-bar {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  margin-bottom: 28px; padding-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap; gap: 16px;
+}
+.title-bar h1 { font-size: 26px; font-weight: 800; letter-spacing: -.02em; }
+.title-bar h1 .accent { color: var(--teal); }
+.title-bar .sub { font-size: 13px; color: var(--ink-2); margin-top: 6px; font-family: var(--mono); }
+.title-bar .meta { text-align: right; font-size: 11px; color: var(--ink-3); font-family: var(--mono); line-height: 1.8; }
+
+/* ── Nav links ── */
+.nav-links {
+  display: flex; gap: 8px; margin-bottom: 24px;
+}
+.nav-link {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 12px; border-radius: 8px;
+  font-size: 12px; font-weight: 500; text-decoration: none;
+  border: 1px solid var(--border); background: var(--surface);
+  color: var(--ink-2); transition: all .15s;
+}
+.nav-link:hover { border-color: var(--teal-border); color: var(--teal); background: var(--teal-bg); }
+
+/* ── Callout ── */
+.callout {
+  display: flex; align-items: flex-start; gap: 12px; padding: 14px 18px;
+  background: var(--teal-bg);
+  border: 1px solid var(--teal-border); border-left: 4px solid var(--teal);
+  border-radius: 12px; margin-bottom: 32px;
+}
+.callout-text { font-size: 12.5px; color: var(--ink-2); line-height: 1.6; }
+.callout-text b { color: var(--ink-1); font-weight: 600; }
+
+/* ── Section ── */
+.c4-section { margin-bottom: 48px; }
+
+.layer-label {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--ink-3); margin-bottom: 14px;
+}
+.layer-label::before { content: ''; width: 20px; height: 2px; background: var(--border); border-radius: 2px; }
+
+.level-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 13px; border-radius: 100px;
+  font-size: 11.5px; font-weight: 600; font-family: var(--mono);
+  margin-bottom: 16px;
+}
+.badge-l1 { background: var(--teal-bg); color: var(--teal-text); border: 1px solid var(--teal-border); }
+.badge-l2 { background: var(--info-bg); color: var(--info); border: 1px solid var(--info-border); }
+
+.section-desc {
+  font-size: 13px; color: var(--ink-2); margin-bottom: 18px;
+  line-height: 1.6; max-width: 720px;
+}
+
+.diagram-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 32px 24px;
+  box-shadow: 0 2px 12px rgba(0,0,0,.06), 0 1px 3px rgba(0,0,0,.04);
+  overflow-x: auto;
+}
+.diagram-card .mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+/* ── Key ── */
+.key-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px; margin-top: 14px;
+}
+.key-item {
+  display: flex; align-items: flex-start; gap: 10px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 11px 14px;
+}
+.key-dot {
+  width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; margin-top: 3px;
+}
+.key-text { font-size: 12px; color: var(--ink-2); line-height: 1.4; }
+.key-text b { color: var(--ink-1); font-size: 12.5px; display: block; margin-bottom: 2px; }
+
+@media (max-width: 640px) {
+  body { padding: 16px; }
+  .diagram-card { padding: 16px 12px; }
+  .key-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<div class="canvas">
+
+  <div class="title-bar">
+    <div>
+      <h1>GuruMaster <span class="accent">Carga Colombia</span> — Modelo C4</h1>
+      <div class="sub">Arquitectura de software · Niveles 1 (Contexto) y 2 (Contenedores)</div>
+    </div>
+    <div class="meta">
+      DOCUMENTO TÉCNICO · C4 Model<br />
+      Junio 2026 · Bogotá, Colombia<br />
+      Notación: C4 Model (Simon Brown)
+    </div>
+  </div>
+
+  <div class="nav-links">
+    <a class="nav-link" href="/">← App</a>
+    <a class="nav-link" href="/architecture">Diagrama visual detallado</a>
+  </div>
+
+  <div class="callout">
+    <span style="font-size:20px;flex-shrink:0">📐</span>
+    <span class="callout-text">
+      El <b>Modelo C4</b> (Simon Brown) describe la arquitectura en capas de zoom progresivo:
+      <b>Nivel 1</b> — ¿qué hace el sistema y quién lo usa?
+      <b>Nivel 2</b> — ¿qué piezas desplegables lo forman?
+      <b>Nivel 3</b> — ¿cómo se organizan los componentes internos? (no incluido aquí — ver el diagrama visual).
+    </span>
+  </div>
+
+  <!-- ═══ NIVEL 1 — CONTEXTO ═══ -->
+  <div class="c4-section">
+    <div class="layer-label">Nivel 1</div>
+    <span class="level-badge badge-l1">C4 Context — El sistema y su entorno</span>
+    <p class="section-desc">
+      Muestra GuruMaster como una caja negra, sus usuarios directos y los sistemas externos con los que interactúa. Es el punto de partida para entender el alcance del sistema.
+    </p>
+    <div class="diagram-card">
+      <div class="mermaid">
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "primaryColor": "#EBF7F5",
+    "primaryTextColor": "#111827",
+    "primaryBorderColor": "#A7D9D2",
+    "lineColor": "#0D7F6E",
+    "secondaryColor": "#DBEAFE",
+    "tertiaryColor": "#F0F2F5",
+    "background": "#FFFFFF",
+    "mainBkg": "#EBF7F5",
+    "nodeBorder": "#A7D9D2",
+    "clusterBkg": "#F0F2F5",
+    "titleColor": "#111827",
+    "edgeLabelBackground": "#FFFFFF",
+    "fontFamily": "Inter, sans-serif"
+  }
+}}%%
+C4Context
+    title Nivel 1 — Contexto del Sistema: GuruMaster Carga Colombia
+
+    Person(operador, "Operador de Flota", "Propietario, despachador o administrador de transporte de carga en Colombia. Consulta en lenguaje natural desde el navegador.")
+
+    System(gurumaster, "GuruMaster Carga Colombia", "Copiloto de IA: consulta rentabilidad de viajes, costos operativos, normatividad colombiana (RNDC, Decreto 1079) y vencimientos de documentos de flota.")
+
+    System_Ext(openai, "OpenAI API", "Modelo gpt-4o-mini para clasificación de intención, generación dinámica de SQL y respuestas en lenguaje natural colombiano.")
+
+    Rel(operador, gurumaster, "Consulta en lenguaje natural", "Browser / HTTP · mismo origen")
+    Rel(gurumaster, openai, "Hasta 3 llamadas LLM por petición de chat", "HTTPS / REST API · ~$0.001 / req")
+      </div>
+    </div>
+
+    <div class="key-grid" style="margin-top:16px">
+      <div class="key-item">
+        <div class="key-dot" style="background:#0D7F6E"></div>
+        <div class="key-text"><b>Operador de Flota</b>Usuario del sistema. Propietario o administrador que consulta en lenguaje natural.</div>
+      </div>
+      <div class="key-item">
+        <div class="key-dot" style="background:#2563EB"></div>
+        <div class="key-text"><b>GuruMaster (Sistema)</b>El sistema bajo diseño. Combina RAG documental + SQL + LLM en un solo endpoint.</div>
+      </div>
+      <div class="key-item">
+        <div class="key-dot" style="background:#9CA3AF"></div>
+        <div class="key-text"><b>OpenAI API</b>Sistema externo. Provee el modelo de lenguaje. Requiere OPENAI_API_KEY en .env.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ NIVEL 2 — CONTENEDORES ═══ -->
+  <div class="c4-section">
+    <div class="layer-label">Nivel 2</div>
+    <span class="level-badge badge-l2">C4 Container — Piezas desplegables del sistema</span>
+    <p class="section-desc">
+      Abre la caja del sistema y muestra los contenedores independientes: aplicaciones, bases de datos y servicios que colaboran para cumplir las responsabilidades del sistema.
+    </p>
+    <div class="diagram-card">
+      <div class="mermaid">
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "primaryColor": "#EBF7F5",
+    "primaryTextColor": "#111827",
+    "primaryBorderColor": "#A7D9D2",
+    "lineColor": "#0D7F6E",
+    "secondaryColor": "#DBEAFE",
+    "tertiaryColor": "#F0F2F5",
+    "background": "#FFFFFF",
+    "mainBkg": "#EBF7F5",
+    "nodeBorder": "#A7D9D2",
+    "clusterBkg": "#F5F6F8",
+    "titleColor": "#111827",
+    "edgeLabelBackground": "#FFFFFF",
+    "fontFamily": "Inter, sans-serif"
+  }
+}}%%
+C4Container
+    title Nivel 2 — Contenedores: GuruMaster Carga Colombia
+
+    Person(operador, "Operador de Flota", "Propietario, despachador o admin")
+
+    System_Boundary(b, "GuruMaster Carga Colombia") {
+        Container(frontend, "Dashboard Web", "React 18 / HTML5 · single-file", "Panel de 3 columnas: chat LLM (izq), tablas de datos estructurados (centro), KPIs y flota (der). Servido por FastAPI en GET /")
+
+        Container(fastapi, "FastAPI Backend", "Python 3.11 / uvicorn · puerto 8000", "Orquesta el flujo completo: clasifica intención, ejecuta RAG, SQL predefinido y Text-to-SQL, construye contexto y genera respuesta LLM.")
+
+        ContainerDb(chroma, "ChromaDB", "Vector Store · MiniLM-L12-v2", "2.311 chunks de: Decreto 1079 de 2015, Manual RNDC v2 y ABC SICE-TAC. Búsqueda semántica por pilar documental.")
+
+        ContainerDb(sqlite, "SQLite", "Base de datos relacional", "9 tablas operativas: trips, trip_expenses, vehicles, drivers, routes, vehicle_documents, maintenance_events, odometer_readings, alerts.")
+    }
+
+    System_Ext(openai, "OpenAI API", "gpt-4o-mini · Classify + Text-to-SQL + Generate")
+
+    Rel(operador, frontend, "Usa", "Browser · HTTP mismo origen")
+    Rel(frontend, fastapi, "POST /chat · GET /api/*", "HTTP / JSON")
+    Rel(fastapi, chroma, "search_documents(query, pillar, n)", "chromadb Python client")
+    Rel(fastapi, sqlite, "Queries param. + Text-to-SQL dinámico", "Python sqlite3")
+    Rel(fastapi, openai, "3 llamadas LLM / petición", "HTTPS · REST API")
+      </div>
+    </div>
+
+    <div class="key-grid" style="margin-top:16px">
+      <div class="key-item">
+        <div class="key-dot" style="background:#2563EB"></div>
+        <div class="key-text"><b>Dashboard Web</b>Single-file React 18 (CDN). No build step. Servido directamente por FastAPI desde <span style="font-family:var(--mono);font-size:10.5px">frontend/GuruMaster.html</span>.</div>
+      </div>
+      <div class="key-item">
+        <div class="key-dot" style="background:#0D7F6E"></div>
+        <div class="key-text"><b>FastAPI Backend</b>Núcleo del sistema. Contiene el orquestador <span style="font-family:var(--mono);font-size:10.5px">chat_service.py</span> y 7 módulos de inteligencia.</div>
+      </div>
+      <div class="key-item">
+        <div class="key-dot" style="background:#059669"></div>
+        <div class="key-text"><b>ChromaDB</b>Búsqueda semántica sobre documentos normativos. Se rellena una vez con <span style="font-family:var(--mono);font-size:10.5px">build_vector_index.py</span>.</div>
+      </div>
+      <div class="key-item">
+        <div class="key-dot" style="background:#059669"></div>
+        <div class="key-text"><b>SQLite</b>Datos operativos de flota. Se inicializa con <span style="font-family:var(--mono);font-size:10.5px">init_db.py</span> + CSVs de seed en <span style="font-family:var(--mono);font-size:10.5px">data/</span>.</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    securityLevel: 'loose',
+    c4: { diagramMarginX: 20, diagramMarginY: 20 }
+  });
+</script>
+</body>
+</html>

@@ -507,9 +507,16 @@ function App() {
         </div>
 
         <a href="/architecture" target="_blank" rel="noopener"
+          title="Diagrama visual de arquitectura"
           style={{padding:'5px 10px',border:'1px solid var(--border)',borderRadius:'var(--r-sm)',background:'var(--raised)',color:'var(--ink-2)',marginLeft:6,display:'flex',alignItems:'center',gap:5,textDecoration:'none',fontSize:11,fontWeight:500}}>
           <Icon name="network" size={13}/>
           <span>Arquitectura</span>
+        </a>
+        <a href="/c4" target="_blank" rel="noopener"
+          title="Diagramas C4 Nivel 1 y 2 (Mermaid)"
+          style={{padding:'5px 10px',border:'1px solid var(--border)',borderRadius:'var(--r-sm)',background:'var(--raised)',color:'var(--ink-2)',marginLeft:4,display:'flex',alignItems:'center',gap:5,textDecoration:'none',fontSize:11,fontWeight:500}}>
+          <Icon name="layers" size={13}/>
+          <span>C4 Model</span>
         </a>
 
         <button onClick={() => setTweak('darkMode', !tweaks.darkMode)}

@@ -48,3 +48,8 @@ def serve_frontend():
 @app.get("/architecture")
 def serve_architecture():
     return FileResponse(FRONTEND_DIR / "GuruMaster_Architecture.html")
+
+
+@app.get("/c4")
+def serve_c4():
+    return FileResponse(FRONTEND_DIR / "GuruMaster_C4.html")
