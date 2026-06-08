@@ -24,7 +24,10 @@ INTENCIONES DISPONIBLES:
   utilidad, tarifas, costos de un viaje, cuánto se ganó o gastó
 - activos: vehículos, placas, SOAT, RTM, tecnomecánica, pólizas, mantenimiento,
   llantas, neumáticos, alertas, vencimientos, estado de la flota
-- mixta: combina dos o más intenciones anteriores
+- mixta: combina dos o más intenciones anteriores. ÚSALA cuando la pregunta pide
+  un resumen general, KPIs, indicadores, dashboard, panorama o rendimiento de la
+  flota sin especificar solo financiero o solo activos. Ejemplos: "KPIs de mi
+  flota", "cómo va mi negocio", "resumen del mes", "cómo está la flota"
 
 ENTIDADES A EXTRAER:
 - placa: placa del vehículo si se menciona (formato colombiano: ABC123 o ABC-123).
@@ -36,9 +39,13 @@ ENTIDADES A EXTRAER:
   "hoy" → {today}
   "mayo" → 2026-05-01 / 2026-05-31
   Si solo se menciona un mes sin rango, usa primer y último día de ese mes.
+- chart_hint: qué gráfico es más útil para responder esta pregunta:
+  "ingresos"    → si pregunta por ingresos, tarifas, flete cobrado, cuánto ganó
+  "gastos"      → si pregunta por costos, gastos, combustible, peajes, cuánto gastó
+  "comparativo" → si pregunta por rentabilidad, margen, utilidad, o no es específico
 
 Responde ÚNICAMENTE con JSON válido, sin explicaciones:
-{{"intencion": "...", "confianza": 0.0, "entidades": {{"placa": null, "fecha_inicio": null, "fecha_fin": null}}}}
+{{"intencion": "...", "confianza": 0.0, "entidades": {{"placa": null, "fecha_inicio": null, "fecha_fin": null, "chart_hint": "comparativo"}}}}
 """
 
 # Fallback basado en keywords cuando el LLM no está disponible
@@ -53,7 +60,12 @@ _FALLBACK = {
     ],
     "activos": [
         "vehículo", "placa", "soat", "tecnomecánica", "póliza", "mantenimiento",
-        "llanta", "llantas", "alerta", "vencimiento", "flota",
+        "llanta", "llantas", "alerta", "vencimiento",
+    ],
+    "mixta": [
+        "kpi", "kpis", "indicador", "indicadores", "dashboard", "resumen",
+        "panorama", "rendimiento", "cómo va", "como va", "cómo está la flota",
+        "estado general", "visión general",
     ],
 }
 

@@ -8,6 +8,8 @@ from response_generator import generate_response
 from schemas import ChatRequest, ChatResponse, Filtros, Metricas, SourceReference
 from sql_service import (
     query_activos_context,
+    query_doc_risk_summary,
+    query_fleet_kpis,
     query_gastos_filtered,
     query_trips_filtered,
     query_vehicle_id_by_placa,
@@ -130,7 +132,17 @@ def chat(req: ChatRequest):
             "rentabilidad": sql_data.get("rentabilidad_vehiculo"),
             "resumen": sql_data.get("resumen_financiero"),
             "query_dinamico": sql_data.get("query_dinamico"),
+            "chart_hint": entidades.get("chart_hint") or "comparativo",
         }
+        if intencion == "mixta":
+            if sql_data.get("activos"):
+                alertas = sql_data["activos"].get("alertas_sistema") or []
+                datos_panel["alertas_criticas"] = [
+                    a for a in alertas if a.get("nivel_alerta") in ("Critica", "Alta")
+                ][:6]
+            if not vehiculo_id:
+                datos_panel["fleet_kpis"] = query_fleet_kpis()
+                datos_panel["doc_risk"] = query_doc_risk_summary()
 
     panel_disponible = datos_panel is not None and bool(sql_data)
 

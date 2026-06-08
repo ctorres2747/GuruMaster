@@ -9,6 +9,7 @@
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js" crossorigin="anonymous"></script>
 <script>
 window.addEventListener('load', function() {
   var ok = window.React && window.ReactDOM && window.Babel;
@@ -100,6 +101,7 @@ button { cursor: pointer; font-family: var(--font); }
 @keyframes pulse-live { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.4)} }
 @keyframes slide-up   { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
 @keyframes dot-blink  { 0%,80%,100%{opacity:.2;transform:scale(.8)} 40%{opacity:1;transform:scale(1)} }
+@keyframes gm-pulse   { 0%,100%{opacity:1} 50%{opacity:.3;transform:scale(1.5)} }
 
 .anim-up { animation: slide-up .22s ease both; }
 .dot { width:5px; height:5px; border-radius:50%; background:var(--teal); animation:dot-blink 1.4s infinite ease-in-out; }
@@ -249,6 +251,11 @@ button { cursor: pointer; font-family: var(--font); }
 .twk-toggle i{position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform .15s;}
 .twk-toggle[data-on="1"] i{transform:translateX(14px);}
 .twk-fab{position:fixed;right:16px;bottom:16px;z-index:9999;width:34px;height:34px;border-radius:10px;border:.5px solid rgba(0,0,0,.12);background:rgba(250,249,247,.88);backdrop-filter:blur(10px);box-shadow:0 2px 8px rgba(0,0,0,.15);display:flex;align-items:center;justify-content:center;font-size:14px;color:rgba(41,38,27,.6);}
+.chart-wrap { position:relative; height:140px; margin:4px 0 6px; }
+.odo-card { display:flex; gap:8px; margin-bottom:10px; }
+.odo-stat { flex:1; background:var(--raised); border:1px solid var(--border); border-radius:var(--r-md); padding:10px 12px; text-align:center; }
+.odo-num { font-family:var(--mono); font-size:15px; font-weight:700; color:var(--teal-text); }
+.odo-lbl { font-size:9.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-3); margin-top:3px; line-height:1.3; }
 </style>
 </head>
 <body>
@@ -363,13 +370,6 @@ function LogoMark({ size = 28 }) {
 ══════════════════════════════════════════ */
 const API = 'http://localhost:8000';
 
-const VEHICLES = [
-  { id:'V001', placa:'ABC123', tipo:'Tractocamion',    marca:'Kenworth' },
-  { id:'V002', placa:'DEF456', tipo:'Camion sencillo', marca:'Hino' },
-  { id:'V003', placa:'GHI789', tipo:'Doble troque',    marca:'Chevrolet' },
-  { id:'V004', placa:'JKL321', tipo:'Turbo',           marca:'NPR' },
-  { id:'V005', placa:'MNO654', tipo:'Tractocamion',    marca:'Freightliner' },
-];
 
 const SUGGESTIONS = [
   '¿El viaje de ABC123 en mayo fue rentable?',
@@ -391,9 +391,335 @@ function fmtCOP(val) {
   return Number(val).toLocaleString('es-CO', { style:'currency', currency:'COP', minimumFractionDigits:0, maximumFractionDigits:0 });
 }
 
-function findVehicle(placa) {
-  const n = (placa || '').toUpperCase().replace('-', '');
-  return VEHICLES.find(v => v.placa.replace('-','') === n) || null;
+function fmtCell(key, val) {
+  if (typeof val !== 'number') return String(val ?? '—');
+  const k = key.toLowerCase();
+  if (/valor|ingreso|gasto|total|costo|utilidad|precio|flete/.test(k)) return fmtCOP(val);
+  if (/pct|porcentaje|margen/.test(k)) return val + '%';
+  return val > 10000 ? fmtCOP(val) : String(val);
+}
+
+
+/* ══════════════════════════════════════════
+   FLEET COCKPIT — helpers
+══════════════════════════════════════════ */
+function fmtCompact(n) {
+  if (Math.abs(n) >= 1e9) return '$' + (n / 1e9).toFixed(2) + 'B';
+  if (Math.abs(n) >= 1e6) return '$' + (n / 1e6).toFixed(1) + 'M';
+  if (Math.abs(n) >= 1e3) return '$' + (n / 1e3).toFixed(0) + 'K';
+  return '$' + n.toFixed(0);
+}
+function fmtFull(n) { return '$' + Math.round(n).toLocaleString('es-CO'); }
+function marginColor(pct) { return pct < 8 ? 'var(--danger)' : pct < 15 ? 'var(--warn)' : 'var(--success)'; }
+function marginLabel(pct) { return pct < 8 ? 'Bajo' : pct < 15 ? 'Medio' : 'Sano'; }
+
+function Spark({ values, color }) {
+  const max = Math.max(...values, 1);
+  return (
+    <div style={{ display:'flex', alignItems:'flex-end', gap:2, height:22 }}>
+      {values.map((v, i) => (
+        <div key={i} style={{ width:4, height:`${Math.max(12,(v/max)*100)}%`, background:color, borderRadius:1, opacity:0.35+(i/values.length)*0.65 }} />
+      ))}
+    </div>
+  );
+}
+
+function HeroStat({ label, value, sub, accent, spark, hero }) {
+  return (
+    <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'var(--r-lg)', padding:hero?'14px 16px':'11px 14px', boxShadow:'var(--shadow-sm)', position:'relative', overflow:'hidden', display:'flex', flexDirection:'column', gap:6 }}>
+      {hero && <div style={{ position:'absolute', inset:0, background:`linear-gradient(135deg, ${accent}14, transparent 60%)`, pointerEvents:'none' }} />}
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', position:'relative' }}>
+        <span style={{ fontSize:10, fontWeight:600, color:'var(--ink-3)', letterSpacing:'.06em', textTransform:'uppercase' }}>{label}</span>
+        {spark && <Spark values={spark} color={accent} />}
+      </div>
+      <div style={{ fontSize:hero?22:18, fontWeight:700, fontFamily:'var(--mono)', color:accent||'var(--ink-1)', lineHeight:1, letterSpacing:'-.02em', position:'relative' }}>{value}</div>
+      {sub && <div style={{ fontSize:11, color:'var(--ink-2)', position:'relative', lineHeight:1.3 }}>{sub}</div>}
+    </div>
+  );
+}
+
+function MarginGauge({ pct }) {
+  const { ResponsiveContainer, RadialBarChart, RadialBar, PolarAngleAxis } = window.Recharts || {};
+  const col = marginColor(pct);
+  const data = [{ name:'margen', value:Math.max(0,Math.min(pct,100)), fill:col }];
+  if (!ResponsiveContainer) return (
+    <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'var(--r-lg)', padding:'11px 14px', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:4 }}>
+      <span style={{ fontSize:22, fontWeight:700, fontFamily:'var(--mono)', color:col }}>{pct.toFixed(1)}%</span>
+      <span style={{ fontSize:10, color:col, textTransform:'uppercase', fontWeight:600 }}>{marginLabel(pct)}</span>
+    </div>
+  );
+  return (
+    <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'var(--r-lg)', padding:'11px 12px', boxShadow:'var(--shadow-sm)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center' }}>
+      <span style={{ fontSize:10, fontWeight:600, color:'var(--ink-3)', letterSpacing:'.06em', textTransform:'uppercase', alignSelf:'flex-start' }}>Margen prom.</span>
+      <div style={{ position:'relative', width:'100%', height:110 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <RadialBarChart innerRadius="72%" outerRadius="100%" data={data} startAngle={220} endAngle={-40} barSize={12}>
+            <PolarAngleAxis type="number" domain={[0,30]} tick={false} />
+            <RadialBar background={{ fill:'var(--raised)' }} dataKey="value" cornerRadius={6} clockWise />
+          </RadialBarChart>
+        </ResponsiveContainer>
+        <div style={{ position:'absolute', inset:0, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', pointerEvents:'none' }}>
+          <span style={{ fontSize:22, fontWeight:700, fontFamily:'var(--mono)', color:col, lineHeight:1 }}>{pct.toFixed(1)}%</span>
+          <span style={{ fontSize:10, fontWeight:600, color:col, marginTop:3, textTransform:'uppercase', letterSpacing:'.05em' }}>{marginLabel(pct)}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RiskSemaphore({ risk }) {
+  const segs = [
+    { key:'vencidos', label:'Vencidos', count:risk.vencidos||0, color:'var(--danger)', action:'Detener operación' },
+    { key:'criticos', label:'Críticos', count:risk.criticos||0, color:'var(--danger)', action:'Renovar hoy' },
+    { key:'urgentes', label:'Urgentes', count:risk.urgentes||0, color:'#EA580C',       action:'≤ 15 días' },
+    { key:'proximos', label:'Próximos', count:risk.proximos||0, color:'var(--warn)',   action:'≤ 30 días' },
+  ];
+  const total = segs.reduce((s,x) => s+x.count, 0) || 1;
+  const danger = (risk.vencidos||0) + (risk.criticos||0);
+  return (
+    <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'var(--r-lg)', padding:'14px 16px', boxShadow:'var(--shadow-sm)' }}>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:9 }}>
+          <span style={{ fontSize:13, fontWeight:700, color:'var(--ink-1)' }}>Riesgo documental</span>
+          {danger > 0 && (
+            <span style={{ display:'inline-flex', alignItems:'center', gap:5, padding:'3px 9px', borderRadius:100, background:'var(--danger-bg)', border:'1px solid var(--danger)', fontSize:11, fontWeight:600, color:'var(--danger)' }}>
+              <span style={{ width:6, height:6, borderRadius:'50%', background:'var(--danger)', animation:'gm-pulse 1.6s infinite' }} />
+              {danger} requieren acción
+            </span>
+          )}
+        </div>
+        <span style={{ fontSize:11, color:'var(--ink-3)', fontFamily:'var(--mono)' }}>{total} docs vigilados</span>
+      </div>
+      <div style={{ display:'flex', height:34, borderRadius:10, overflow:'hidden', gap:2, marginBottom:14, background:'var(--raised)' }}>
+        {segs.map(s => s.count > 0 && (
+          <div key={s.key} title={`${s.label}: ${s.count}`} style={{ flex:s.count, background:s.color, display:'flex', alignItems:'center', justifyContent:'center', minWidth:34 }}>
+            <span style={{ fontSize:14, fontWeight:700, fontFamily:'var(--mono)', color:'#fff' }}>{s.count}</span>
+          </div>
+        ))}
+      </div>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:8 }}>
+        {segs.map(s => (
+          <div key={s.key} style={{ padding:'9px 10px', borderRadius:10, background:'var(--raised)', border:`1px solid ${s.count>0?s.color:'var(--border)'}`, opacity:s.count>0?1:0.55 }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+              <span style={{ fontSize:18, fontWeight:700, fontFamily:'var(--mono)', color:s.count>0?s.color:'var(--ink-3)', lineHeight:1 }}>{s.count}</span>
+              <span style={{ width:8, height:8, borderRadius:'50%', background:s.color }} />
+            </div>
+            <div style={{ fontSize:11, fontWeight:600, color:'var(--ink-1)', marginTop:5 }}>{s.label}</div>
+            <div style={{ fontSize:10, color:'var(--ink-3)', marginTop:1 }}>{s.action}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function FleetRanking({ vehicles, maxMargin }) {
+  const [sortKey, setSortKey] = useState('utilidad');
+  const sorted = [...vehicles].sort((a,b) => b[sortKey] - a[sortKey]);
+  const sorts = [['utilidad','Utilidad'],['margen_pct','Margen'],['ingresos','Ingresos'],['costo_por_km','$/km']];
+  return (
+    <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'var(--r-lg)', boxShadow:'var(--shadow-sm)', overflow:'hidden', display:'flex', flexDirection:'column', flex:1 }}>
+      <div style={{ padding:'14px 18px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:8 }}>
+        <span style={{ fontSize:13, fontWeight:700, color:'var(--ink-1)' }}>
+          Rendimiento <span style={{ color:'var(--ink-3)', fontWeight:500, fontFamily:'var(--mono)', fontSize:12 }}>· {vehicles.length} vehículos</span>
+        </span>
+        <div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>
+          {sorts.map(([k,l]) => (
+            <button key={k} onClick={() => setSortKey(k)} style={{ padding:'4px 10px', borderRadius:7, fontSize:11, fontWeight:600, border:`1px solid ${sortKey===k?'var(--teal)':'var(--border)'}`, background:sortKey===k?'var(--teal)':'transparent', color:sortKey===k?'#fff':'var(--ink-2)', cursor:'pointer' }}>{l}</button>
+          ))}
+        </div>
+      </div>
+      <div style={{ overflowY:'auto', flex:1 }}>
+        {sorted.map((v,i) => {
+          const col = marginColor(v.margen_pct);
+          const barPct = Math.max(3, Math.min((v.margen_pct/maxMargin)*100, 100));
+          return (
+            <div key={v.placa} style={{ display:'grid', gridTemplateColumns:'20px 88px 1fr 92px 70px', alignItems:'center', gap:10, padding:'10px 18px', borderBottom:i<sorted.length-1?'1px solid var(--border)':'none' }}>
+              <span style={{ fontSize:11, fontWeight:700, color:i<3?'var(--teal)':'var(--ink-3)', fontFamily:'var(--mono)', textAlign:'center' }}>{String(i+1).padStart(2,'0')}</span>
+              <div>
+                <div style={{ fontSize:12, fontWeight:700, fontFamily:'var(--mono)', color:'var(--ink-1)', letterSpacing:'.03em' }}>{v.placa}</div>
+                <div style={{ fontSize:10, color:'var(--ink-3)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{v.marca}</div>
+              </div>
+              <div>
+                <div style={{ display:'flex', justifyContent:'space-between', marginBottom:3 }}>
+                  <span style={{ fontSize:10, color:'var(--ink-3)' }}>
+                    {v.viajes_completados} viajes{v.viajes_en_curso>0&&<span style={{ color:'var(--teal)' }}> +{v.viajes_en_curso}</span>}
+                  </span>
+                  <span style={{ fontSize:11, fontWeight:700, fontFamily:'var(--mono)', color:col }}>{v.margen_pct.toFixed(1)}%</span>
+                </div>
+                <div style={{ height:6, background:'var(--raised)', borderRadius:4, overflow:'hidden', position:'relative' }}>
+                  <div style={{ position:'absolute', left:`${(8/maxMargin)*100}%`, top:0, bottom:0, width:1, background:'var(--border)' }} />
+                  <div style={{ position:'absolute', left:`${(15/maxMargin)*100}%`, top:0, bottom:0, width:1, background:'var(--border)' }} />
+                  <div style={{ height:'100%', width:`${barPct}%`, background:col, borderRadius:4 }} />
+                </div>
+              </div>
+              <div style={{ textAlign:'right' }}>
+                <div style={{ fontSize:12, fontWeight:700, fontFamily:'var(--mono)', color:v.utilidad>=0?'var(--ink-1)':'var(--danger)' }}>{fmtCompact(v.utilidad)}</div>
+                <div style={{ fontSize:10, color:'var(--ink-3)' }}>utilidad</div>
+              </div>
+              <div style={{ textAlign:'right' }}>
+                <div style={{ fontSize:11, fontWeight:600, fontFamily:'var(--mono)', color:'var(--ink-2)' }}>${v.costo_por_km?v.costo_por_km.toFixed(0):'—'}</div>
+                <div style={{ fontSize:10, color:'var(--ink-3)' }}>$/km</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function FleetChart({ vehicles }) {
+  const { ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip } = window.Recharts || {};
+  if (!ResponsiveContainer) return null;
+  const data = vehicles.map(v => ({ placa:v.placa, ingresos:v.ingresos, gastos:v.gastos, utilidad:v.utilidad }));
+  const CustomTip = ({ active, payload, label }) => {
+    if (!active || !payload?.length) return null;
+    return (
+      <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:10, padding:'10px 12px', boxShadow:'var(--shadow-md)' }}>
+        <div style={{ fontSize:12, fontWeight:700, fontFamily:'var(--mono)', color:'var(--ink-1)', marginBottom:6 }}>{label}</div>
+        {payload.map((p,i) => (
+          <div key={i} style={{ display:'flex', alignItems:'center', gap:7, fontSize:11, marginTop:2 }}>
+            <span style={{ width:9, height:9, borderRadius:2, background:p.color }} />
+            <span style={{ color:'var(--ink-2)', minWidth:56 }}>{p.name}</span>
+            <span style={{ fontFamily:'var(--mono)', fontWeight:700, color:'var(--ink-1)' }}>{fmtFull(p.value)}</span>
+          </div>
+        ))}
+      </div>
+    );
+  };
+  return (
+    <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'var(--r-lg)', padding:'14px 16px 8px', boxShadow:'var(--shadow-sm)' }}>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12 }}>
+        <span style={{ fontSize:13, fontWeight:700, color:'var(--ink-1)' }}>Ingresos · Gastos · Utilidad</span>
+        <div style={{ display:'flex', gap:12 }}>
+          {[['Ingresos','var(--teal)'],['Gastos','var(--danger)'],['Utilidad','var(--warn)']].map(([l,c]) => (
+            <span key={l} style={{ display:'flex', alignItems:'center', gap:5, fontSize:11, color:'var(--ink-2)' }}>
+              <span style={{ width:10, height:10, borderRadius:2, background:c }} />{l}
+            </span>
+          ))}
+        </div>
+      </div>
+      <ResponsiveContainer width="100%" height={Math.max(200, vehicles.length*18)}>
+        <ComposedChart data={data} margin={{ top:6, right:10, left:0, bottom:0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+          <XAxis dataKey="placa" tick={{ fontSize:10, fontFamily:'var(--mono)', fill:'var(--ink-3)' }} axisLine={{ stroke:'var(--border)' }} tickLine={false} interval={0} />
+          <YAxis tickFormatter={fmtCompact} tick={{ fontSize:10, fontFamily:'var(--mono)', fill:'var(--ink-3)' }} axisLine={false} tickLine={false} width={48} />
+          <Tooltip content={<CustomTip />} cursor={{ fill:'var(--raised)', opacity:.5 }} />
+          <Bar dataKey="ingresos" name="Ingresos" fill="var(--teal)" radius={[4,4,0,0]} maxBarSize={34} isAnimationActive={false} />
+          <Bar dataKey="gastos" name="Gastos" fill="var(--danger)" radius={[4,4,0,0]} maxBarSize={34} opacity={0.6} isAnimationActive={false} />
+          <Line type="monotone" dataKey="utilidad" name="Utilidad" stroke="var(--warn)" strokeWidth={2.5} dot={{ r:3, fill:'var(--warn)' }} activeDot={{ r:5 }} isAnimationActive={false} />
+        </ComposedChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+function AlertStrip({ alerts }) {
+  if (!alerts || !alerts.length) return null;
+  const nivelColor = { critica:'var(--danger)', alta:'#EA580C', media:'var(--warn)', baja:'var(--success)' };
+  return (
+    <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'var(--r-lg)', boxShadow:'var(--shadow-sm)', overflow:'hidden' }}>
+      <div style={{ padding:'10px 14px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', gap:8 }}>
+        <span style={{ fontSize:12, fontWeight:700, color:'var(--ink-1)' }}>Alertas críticas</span>
+        <span style={{ marginLeft:'auto', fontSize:11, fontWeight:700, fontFamily:'var(--mono)', color:'var(--danger)', padding:'2px 8px', borderRadius:100, background:'var(--danger-bg)' }}>{alerts.length}</span>
+      </div>
+      <div style={{ maxHeight:340, overflowY:'auto' }}>
+        {alerts.map((a,i) => (
+          <div key={i} style={{ display:'flex', alignItems:'center', gap:11, padding:'10px 16px', borderBottom:i<alerts.length-1?'1px solid var(--border)':'none' }}>
+            <span style={{ width:8, height:8, borderRadius:'50%', background:nivelColor[(a.nivel_alerta||'').toLowerCase()]||'var(--warn)', flexShrink:0 }} />
+            <span style={{ fontSize:12, fontWeight:700, fontFamily:'var(--mono)', color:'var(--ink-1)', minWidth:60 }}>{a.placa||a.vehiculo_id}</span>
+            <span style={{ fontSize:12, color:'var(--ink-2)', flex:1, lineHeight:1.4 }}>{a.descripcion||a.mensaje}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function FleetCockpit({ vehicles, totals, risk, alerts }) {
+  const maxMargin = Math.max(...vehicles.map(v => v.margen_pct), 20) * 1.05;
+  const best  = [...vehicles].sort((a,b) => b.utilidad - a.utilidad)[0];
+  const worst = [...vehicles].sort((a,b) => a.utilidad - b.utilidad)[0];
+  const enCurso    = vehicles.reduce((s,v) => s + v.viajes_en_curso, 0);
+  const completados = vehicles.reduce((s,v) => s + v.viajes_completados, 0);
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr) 1.1fr', gap:8 }}>
+        <HeroStat label="Ingresos flota" value={fmtCompact(totals.ingresos_total)} sub={`${completados} viajes · ${enCurso} en curso`} accent="var(--teal)" spark={[5,7,6,9,8,11,10,13]} />
+        <HeroStat label="Gastos flota" value={fmtCompact(totals.gastos_total)} sub="Combustible · peajes · mant." accent="var(--danger)" spark={[8,7,9,6,8,7,9,8]} />
+        <HeroStat hero label="Utilidad neta" value={fmtCompact(totals.utilidad_total)} sub={totals.utilidad_total>=0?'▲ Operación rentable':'▼ Pérdida operativa'} accent={totals.utilidad_total>=0?'var(--success)':'var(--danger)'} spark={[4,6,5,8,7,10,9,12]} />
+        <HeroStat label="Vehículos" value={vehicles.length} sub={`Mejor: ${best.placa} · Peor: ${worst.placa}`} accent="var(--ink-1)" />
+        <MarginGauge pct={totals.margen_promedio} />
+      </div>
+      <RiskSemaphore risk={risk} />
+      <div style={{ display:'grid', gridTemplateColumns:alerts?.length?'1.55fr 1fr':'1fr', gap:14, alignItems:'start' }}>
+        <div style={{ maxHeight:380, display:'flex' }}>
+          <FleetRanking vehicles={vehicles} maxMargin={maxMargin} />
+        </div>
+        {alerts?.length > 0 && <AlertStrip alerts={alerts} />}
+      </div>
+      <FleetChart vehicles={vehicles} />
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════
+   GASTO BAR CHART (Chart.js)
+══════════════════════════════════════════ */
+function GastoBarChart({ gastos, darkMode, barColor = 'rgba(13,127,110,.75)' }) {
+  if (!gastos || Object.keys(gastos).length === 0) return null;
+
+  const R = window.Recharts;
+  if (!R) {
+    // Fallback SVG si Recharts no cargó
+    const entries  = Object.entries(gastos).sort((a, b) => b[1] - a[1]);
+    const maxVal   = Math.max(...entries.map(([, v]) => v));
+    const barH = 20, gap = 5, labelW = 130, barMaxW = 195;
+    const textFill = darkMode ? '#8B95A8' : '#4B5563';
+    const fmt = v => v >= 1e6 ? `$${(v/1e6).toFixed(1)}M` : `$${(v/1e3).toFixed(0)}k`;
+    return (
+      <svg width="100%" viewBox={`0 0 ${labelW+barMaxW+68} ${entries.length*(barH+gap)}`}
+        style={{display:'block',margin:'4px 0 10px',overflow:'visible'}}>
+        {entries.map(([key, val], i) => {
+          const bw = Math.max(4, (val/maxVal)*barMaxW), y = i*(barH+gap);
+          return <g key={key}>
+            <text x={labelW-7} y={y+barH*0.68} textAnchor="end" fontSize="10" fill={textFill} fontFamily="Inter,sans-serif">{key.length>17?key.slice(0,16)+'…':key}</text>
+            <rect x={labelW} y={y} width={bw} height={barH} rx="3" fill={barColor}/>
+            <text x={labelW+bw+6} y={y+barH*0.68} fontSize="9.5" fill={textFill} fontFamily="IBM Plex Mono,monospace">{fmt(val)}</text>
+          </g>;
+        })}
+      </svg>
+    );
+  }
+
+  const { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LabelList } = R;
+  const data = Object.entries(gastos)
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value);
+  const textFill     = darkMode ? '#8B95A8' : '#4B5563';
+  const fmtTick      = v => v >= 1e6 ? `$${(v/1e6).toFixed(1)}M` : `$${(v/1e3).toFixed(0)}k`;
+  const tooltipStyle = { background:'var(--surface)', border:'1px solid var(--border)', borderRadius:8, fontSize:11, color:'var(--ink-1)', padding:'6px 10px' };
+  const tickStyle    = { fontSize:9.5, fill:textFill, fontFamily:'Inter, sans-serif' };
+  const labelStyle   = { fontSize:9, fill:textFill, fontFamily:'IBM Plex Mono, monospace' };
+
+  return (
+    <ResponsiveContainer width="100%" height={data.length * 24 + 10}>
+      <BarChart data={data} layout="vertical" barSize={13}
+        margin={{ left:4, right:64, top:2, bottom:2 }}>
+        <XAxis type="number" tick={tickStyle} tickFormatter={fmtTick}
+          axisLine={false} tickLine={false} />
+        <YAxis type="category" dataKey="name" width={130} tick={tickStyle}
+          tickFormatter={v => v.length > 19 ? v.slice(0,18) + '…' : v}
+          axisLine={false} tickLine={false} />
+        <Tooltip formatter={v => [fmtCOP(v), 'Gasto']} contentStyle={tooltipStyle}
+          cursor={{ fill: darkMode ? 'rgba(255,255,255,.04)' : 'rgba(0,0,0,.04)' }} />
+        <Bar dataKey="value" fill={barColor} radius={[0,3,3,0]}>
+          <LabelList dataKey="value" position="right" formatter={fmtTick} style={labelStyle} />
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  );
 }
 
 /* ══════════════════════════════════════════
@@ -410,20 +736,47 @@ function App() {
   const [alerts, setAlerts]      = useState([]);
   const [online, setOnline]      = useState(null);
   const [lastResp, setLastResp]  = useState(null);
+  const [loadingPhase, setLoadingPhase] = useState(0);
+  const [odoData, setOdoData]    = useState(null);
+  const [vehicles, setVehicles]  = useState([]);
 
-  const endRef   = useRef(null);
-  const inputRef = useRef(null);
+  const endRef    = useRef(null);
+  const inputRef  = useRef(null);
+  const phaseT1   = useRef(null);
+  const phaseT2   = useRef(null);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', tweaks.darkMode ? 'dark' : 'light');
   }, [tweaks.darkMode]);
 
+  const findVehicle = (placa) => {
+    const n = (placa || '').toUpperCase().replace('-', '');
+    return vehicles.find(v => v.placa.replace('-', '') === n) || null;
+  };
+
   useEffect(() => {
     fetch(API + '/health').then(r => setOnline(r.ok)).catch(() => setOnline(false));
     fetch(API + '/api/vehicles/alerts?days=30').then(r => r.ok ? r.json() : []).then(d => setAlerts(d)).catch(() => {});
+    fetch(API + '/api/vehicles')
+      .then(r => r.ok ? r.json() : [])
+      .then(data => setVehicles(data.map(v => ({
+        id:   v.vehiculo_id,
+        placa: v.placa,
+        tipo:  v.tipo_vehiculo,
+        marca: v.marca,
+      }))))
+      .catch(() => {});
   }, []);
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior:'smooth' }); }, [msgs, loading]);
+
+  useEffect(() => {
+    if (!selVeh) { setOdoData(null); return; }
+    fetch(API + '/api/vehicles/' + selVeh.id + '/odometer')
+      .then(r => r.ok ? r.json() : [])
+      .then(d => setOdoData(d))
+      .catch(() => setOdoData(null));
+  }, [selVeh]);
 
   async function send(text) {
     const q = (text ?? input).trim();
@@ -435,6 +788,9 @@ function App() {
 
     setMsgs(prev => [...prev, { id: Date.now(), role:'user', text: q }]);
     setLoading(true);
+    setLoadingPhase(0);
+    phaseT1.current = setTimeout(() => setLoadingPhase(1), 900);
+    phaseT2.current = setTimeout(() => setLoadingPhase(2), 2200);
 
     try {
       const res = await fetch(API + '/chat', {
@@ -452,6 +808,8 @@ function App() {
     } catch(err) {
       setMsgs(prev => [...prev, { id: Date.now()+1, role:'guru', isErr: true, text: 'No pude conectar con el backend.\n\nVerifica que el servidor corra con: **uvicorn main:app --reload** en la carpeta /backend.', intent:null, confianza:null, fuentes:[], metricas:null, advertencias:[] }]);
     } finally {
+      clearTimeout(phaseT1.current);
+      clearTimeout(phaseT2.current);
       setLoading(false);
     }
   }
@@ -492,7 +850,7 @@ function App() {
           </button>
           {menuOpen && (
             <div className="placa-dropdown">
-              {VEHICLES.map(v => (
+              {vehicles.map(v => (
                 <div key={v.id} className={`placa-item ${selVeh?.id===v.id?'act':''}`}
                   onClick={() => { setSelVeh(v); setMenuOpen(false); }}>
                   <span className="pi-placa">{v.placa}</span>
@@ -557,7 +915,12 @@ function App() {
             ))}
             {loading && (
               <div className="msg msg-guru">
-                <div className="typing-dots"><div className="dot"/><div className="dot"/><div className="dot"/></div>
+                <div className="typing-dots">
+                  <div className="dot"/><div className="dot"/><div className="dot"/>
+                  <span style={{fontSize:11,color:'var(--ink-3)',marginLeft:8,fontStyle:'italic'}}>
+                    {['Clasificando pregunta…','Consultando fuentes…','Generando respuesta…'][loadingPhase]}
+                  </span>
+                </div>
               </div>
             )}
             <div ref={endRef}/>
@@ -627,13 +990,58 @@ function App() {
                         <div className="metric-card"><div className="metric-lbl">Margen</div><div className={`metric-val ${metricas.margen_pct>=0?'mv-pos':'mv-neg'}`}>{metricas.margen_pct}%</div></div>
                       </div>
                     </>}
+                    {metricas && (() => {
+                      const hint      = dp?.chart_hint || 'comparativo';
+                      const gastos    = dp?.rentabilidad?.gastos_operativos || dp?.resumen?.gastos_detalle;
+                      const fleetKpis = dp?.fleet_kpis || [];
+                      const ingresosObj = (dp?.viajes || []).length > 0
+                        ? Object.fromEntries(
+                            (dp.viajes).slice(0,6).map(v => [
+                              v.ciudad_origen && v.ciudad_destino
+                                ? `${v.ciudad_origen.slice(0,3)}→${v.ciudad_destino.slice(0,3)} ${(v.fecha_viaje||'').slice(5)}`
+                                : v.viaje_id,
+                              v.ingreso
+                            ])
+                          )
+                        : null;
+
+                      // ── Vista KPI de flota (FleetCockpit) ──
+                      if (fleetKpis.length > 0) {
+                        const totals = {
+                          ingresos_total:  fleetKpis.reduce((s,v) => s + v.ingresos, 0),
+                          gastos_total:    fleetKpis.reduce((s,v) => s + v.gastos, 0),
+                          utilidad_total:  fleetKpis.reduce((s,v) => s + v.utilidad, 0),
+                          margen_promedio: fleetKpis.reduce((s,v) => s + v.margen_pct, 0) / fleetKpis.length,
+                        };
+                        return <FleetCockpit
+                          vehicles={fleetKpis}
+                          totals={totals}
+                          risk={dp?.doc_risk || {}}
+                          alerts={dp?.alertas_criticas || []}
+                        />;
+                      }
+
+                      // Vista financiera estándar: gráficos por viaje / categoría
+                      const showIngresos = (hint === 'ingresos' || hint === 'comparativo') && ingresosObj;
+                      const showGastos   = (hint === 'gastos'   || hint === 'comparativo') && gastos && Object.keys(gastos).length > 0;
+                      return <>
+                        {showIngresos && <>
+                          <div className="sec-lbl" style={{marginTop:12}}>Ingresos por viaje</div>
+                          <GastoBarChart gastos={ingresosObj} darkMode={tweaks.darkMode} barColor="rgba(13,127,110,.75)"/>
+                        </>}
+                        {showGastos && <>
+                          <div className="sec-lbl" style={{marginTop: showIngresos ? 8 : 12}}>Gastos por categoría</div>
+                          <GastoBarChart gastos={gastos} darkMode={tweaks.darkMode} barColor="rgba(220,38,38,.6)"/>
+                        </>}
+                      </>;
+                    })()}
                     {t2sql?.filas?.length > 0 && <>
                       <div className="sec-lbl" style={{marginTop:12}}>Resultado de consulta</div>
                       <div className="t2sql-box">
                         <div className="t2sql-sql">{t2sql.sql}</div>
                         <table className="dtable" style={{marginTop:8}}>
                           <thead><tr>{Object.keys(t2sql.filas[0]).map(k=><th key={k}>{k}</th>)}</tr></thead>
-                          <tbody>{t2sql.filas.map((row,i)=><tr key={i}>{Object.values(row).map((v,j)=><td key={j}>{typeof v==='number'&&v>10000?fmtCOP(v):String(v??'—')}</td>)}</tr>)}</tbody>
+                          <tbody>{t2sql.filas.map((row,i)=><tr key={i}>{Object.entries(row).map(([k,v],j)=><td key={j}>{fmtCell(k,v)}</td>)}</tr>)}</tbody>
                         </table>
                       </div>
                     </>}
@@ -665,6 +1073,28 @@ function App() {
               const hasPanelData = dp?.tipo === 'activos';
 
               return <>
+                {selVeh && odoData && odoData.length > 0 && (() => {
+                  const lastKm = odoData[0].kilometraje;
+                  const nextMaint = mants.find(m => m.proximo_mantenimiento_km > 0);
+                  const kmFaltantes = nextMaint ? nextMaint.proximo_mantenimiento_km - lastKm : null;
+                  return <>
+                    <div className="sec-lbl">Odómetro</div>
+                    <div className="odo-card">
+                      <div className="odo-stat">
+                        <div className="odo-num">{lastKm.toLocaleString('es-CO')} km</div>
+                        <div className="odo-lbl">Último registro<br/>{odoData[0].fecha_registro}</div>
+                      </div>
+                      {kmFaltantes !== null && (
+                        <div className="odo-stat">
+                          <div className="odo-num" style={{color: kmFaltantes < 5000 ? 'var(--warn)' : 'var(--teal-text)'}}>
+                            {kmFaltantes > 0 ? `+${kmFaltantes.toLocaleString('es-CO')} km` : 'Vencido'}
+                          </div>
+                          <div className="odo-lbl">Próx. mant.<br/>{nextMaint.categoria_mantenimiento}</div>
+                        </div>
+                      )}
+                    </div>
+                  </>;
+                })()}
                 {hasPanelData && mants.length > 0 && <>
                   <div className="sec-lbl">Historial de mantenimiento ({mants.length})</div>
                   <table className="dtable">
@@ -788,7 +1218,7 @@ function App() {
 
             <div className="kpi-block">
               <div className="kpi-btitle">Flota</div>
-              {VEHICLES.map(v => (
+              {vehicles.map(v => (
                 <div key={v.id} className="kpi-row" style={{cursor:'pointer'}} onClick={() => setSelVeh(v)}>
                   <span style={{fontFamily:'var(--mono)',fontSize:11,fontWeight:600,color:selVeh?.id===v.id?'var(--teal)':'var(--ink-2)'}}>{v.placa}</span>
                   <span style={{fontSize:10,color:'var(--ink-3)'}}>{v.marca}</span>

@@ -271,6 +271,60 @@ def query_alerts(vehiculo_id: str | None = None, estado: str | None = None) -> l
     return [dict(r) for r in rows]
 
 
+# --- Fleet KPIs (comparación por vehículo) ---
+
+def query_fleet_kpis() -> list[dict]:
+    """Rentabilidad por vehículo: ingresos, gastos, utilidad, margen, viajes, costo/km."""
+    conn = get_conn()
+    rows = conn.execute(
+        "SELECT v.vehiculo_id, v.placa, v.tipo_vehiculo, v.marca, "
+        "COUNT(CASE WHEN t.estado_viaje = 'Completado' THEN 1 END) as viajes_completados, "
+        "COUNT(CASE WHEN t.estado_viaje NOT IN ('Completado','Cancelado') THEN 1 END) as viajes_en_curso, "
+        "COALESCE(SUM(CASE WHEN t.estado_viaje = 'Completado' THEN t.ingreso END), 0) as ingresos, "
+        "COALESCE(SUM(CASE WHEN t.estado_viaje = 'Completado' THEN eg.total_gasto END), 0) as gastos, "
+        "COALESCE(SUM(CASE WHEN t.estado_viaje = 'Completado' THEN r.distancia_km END), 0) as km_recorridos "
+        "FROM vehicles v "
+        "LEFT JOIN trips t ON t.vehiculo_id = v.vehiculo_id "
+        "LEFT JOIN routes r ON r.ruta_id = t.ruta_id "
+        "LEFT JOIN (SELECT viaje_id, SUM(valor) as total_gasto FROM trip_expenses GROUP BY viaje_id) eg "
+        "  ON eg.viaje_id = t.viaje_id "
+        "GROUP BY v.vehiculo_id, v.placa, v.tipo_vehiculo, v.marca "
+        "ORDER BY ingresos DESC"
+    ).fetchall()
+    conn.close()
+    result = []
+    for r in rows:
+        row = dict(r)
+        utilidad = row["ingresos"] - row["gastos"]
+        row["utilidad"] = utilidad
+        row["margen_pct"] = round(utilidad / row["ingresos"] * 100, 1) if row["ingresos"] > 0 else 0
+        km = row["km_recorridos"]
+        row["costo_por_km"] = round(row["gastos"] / km) if km > 0 else None
+        result.append(row)
+    return result
+
+
+def query_doc_risk_summary() -> dict:
+    """Conteo de documentos por nivel de riesgo en toda la flota."""
+    conn = get_conn()
+    row = conn.execute(
+        "SELECT "
+        "SUM(CASE WHEN julianday(fecha_vencimiento) - julianday('now') < 0 THEN 1 ELSE 0 END) as vencidos, "
+        "SUM(CASE WHEN julianday(fecha_vencimiento) - julianday('now') BETWEEN 0 AND 7 THEN 1 ELSE 0 END) as criticos, "
+        "SUM(CASE WHEN julianday(fecha_vencimiento) - julianday('now') BETWEEN 8 AND 15 THEN 1 ELSE 0 END) as urgentes, "
+        "SUM(CASE WHEN julianday(fecha_vencimiento) - julianday('now') BETWEEN 16 AND 30 THEN 1 ELSE 0 END) as proximos "
+        "FROM vehicle_documents "
+        "WHERE fecha_vencimiento IS NOT NULL AND fecha_vencimiento != ''"
+    ).fetchone()
+    conn.close()
+    return {
+        "vencidos": row["vencidos"] or 0,
+        "criticos": row["criticos"] or 0,
+        "urgentes": row["urgentes"] or 0,
+        "proximos": row["proximos"] or 0,
+    }
+
+
 # --- Filtered queries for /chat ---
 
 def query_vehicle_id_by_placa(placa: str) -> str | None:
