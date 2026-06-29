@@ -9,6 +9,7 @@
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js" crossorigin="anonymous"></script>
 <script>
 window.addEventListener('load', function() {
@@ -1295,9 +1296,15 @@ function App() {
               const viajes = dp?.viajes || [];
               const rent = dp?.rentabilidad;
               const t2sql = dp?.query_dinamico;
-              return !metricas && !viajes.length && !t2sql
+              const hasViz = !!dp?.viz_spec?.type;
+              return !metricas && !viajes.length && !t2sql && !hasViz
                 ? <div className="empty-state"><div className="empty-ico">💰</div><div className="empty-title">Sin datos financieros</div><div className="empty-sub">Pregunta por rentabilidad de un viaje o costos del mes.</div></div>
                 : <>
+                    {dp?.viz_spec?.type && (
+                      <div style={{ marginBottom: 14 }}>
+                        <VizRenderer vizSpec={dp.viz_spec} datosPanel={dp} />
+                      </div>
+                    )}
                     {metricas && <>
                       <div className="sec-lbl">Resumen financiero</div>
                       <div className="metrics-grid">
@@ -1309,7 +1316,6 @@ function App() {
                     </>}
                     {metricas && (() => {
                       const dp        = lastResp?.datos_panel;
-                      const vizSpec   = dp?.viz_spec;
                       const fleetKpis = dp?.fleet_kpis || [];
                       const gastos    = dp?.rentabilidad?.gastos_operativos || dp?.resumen?.gastos_detalle;
                       const ingresosObj = (dp?.viajes || []).length > 0
@@ -1339,12 +1345,9 @@ function App() {
                         />;
                       }
 
-                      // Gráfico dinámico elegido por el LLM
-                      if (vizSpec?.type) {
-                        return <VizRenderer vizSpec={vizSpec} datosPanel={dp} />;
-                      }
-
                       // Vista financiera estándar (fallback sin viz_spec)
+                      if (dp?.viz_spec?.type) return null;
+
                       const hint = dp?.chart_hint || 'comparativo';
                       const showIngresos = (hint === 'ingresos' || hint === 'comparativo') && ingresosObj;
                       const showGastos   = (hint === 'gastos'   || hint === 'comparativo') && gastos && Object.keys(gastos).length > 0;
