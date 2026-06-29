@@ -1144,7 +1144,7 @@ function FinancieroPanelBlock({ entry, tweaks }) {
             )
           : null;
 
-        if (fleetKpis.length > 0 && entry.intent === 'mixta') {
+        if (fleetKpis.length > 0 && entry.intent === 'mixta' && !dp?.viz_spec?.type) {
           const totals = {
             ingresos_total: fleetKpis.reduce((s, v) => s + v.ingresos, 0),
             gastos_total: fleetKpis.reduce((s, v) => s + v.gastos, 0),
