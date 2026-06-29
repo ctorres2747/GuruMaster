@@ -1110,15 +1110,37 @@ function FinancieroPanelBlock({ entry, tweaks }) {
   const metricas = entry.metricas;
   const viajes = dp?.viajes || [];
   const t2sql = dp?.query_dinamico;
+  const hasViz = !!dp?.viz_spec?.type;
   if (!hasFinancieroContent(entry)) return null;
 
+  const t2sqlBlock = t2sql?.filas?.length > 0 && (
+    <>
+      <div className="sec-lbl" style={{ marginTop: hasViz ? 0 : 12 }}>Resultado de consulta</div>
+      <div className="t2sql-box">
+        <div className="t2sql-sql">{t2sql.sql}</div>
+        <table className="dtable" style={{ marginTop: 8 }}>
+          <thead><tr>{Object.keys(t2sql.filas[0]).map(k => <th key={k}>{k}</th>)}</tr></thead>
+          <tbody>{t2sql.filas.map((row, i) => (
+            <tr key={i}>{Object.entries(row).map(([k, v], j) => <td key={j}>{fmtCell(k, v)}</td>)}</tr>
+          ))}</tbody>
+        </table>
+      </div>
+    </>
+  );
+
+  // Con viz_spec: solo el gráfico elegido (+ T2SQL si la pregunta lo generó)
+  if (hasViz) {
+    return (
+      <>
+        <VizRenderer vizSpec={dp.viz_spec} datosPanel={dp} />
+        {t2sqlBlock}
+      </>
+    );
+  }
+
+  // Sin viz_spec: panel financiero completo (legacy)
   return (
     <>
-      {dp?.viz_spec?.type && (
-        <div style={{ marginBottom: 14 }}>
-          <VizRenderer vizSpec={dp.viz_spec} datosPanel={dp} />
-        </div>
-      )}
       {metricas && (
         <>
           <div className="sec-lbl">Resumen financiero</div>
@@ -1144,7 +1166,7 @@ function FinancieroPanelBlock({ entry, tweaks }) {
             )
           : null;
 
-        if (fleetKpis.length > 0 && entry.intent === 'mixta' && !dp?.viz_spec?.type) {
+        if (fleetKpis.length > 0 && entry.intent === 'mixta') {
           const totals = {
             ingresos_total: fleetKpis.reduce((s, v) => s + v.ingresos, 0),
             gastos_total: fleetKpis.reduce((s, v) => s + v.gastos, 0),
@@ -1160,8 +1182,6 @@ function FinancieroPanelBlock({ entry, tweaks }) {
             />
           );
         }
-
-        if (dp?.viz_spec?.type) return null;
 
         const hint = dp?.chart_hint || 'comparativo';
         const showIngresos = (hint === 'ingresos' || hint === 'comparativo') && ingresosObj;
@@ -1183,20 +1203,7 @@ function FinancieroPanelBlock({ entry, tweaks }) {
           </>
         );
       })()}
-      {t2sql?.filas?.length > 0 && (
-        <>
-          <div className="sec-lbl" style={{ marginTop: 12 }}>Resultado de consulta</div>
-          <div className="t2sql-box">
-            <div className="t2sql-sql">{t2sql.sql}</div>
-            <table className="dtable" style={{ marginTop: 8 }}>
-              <thead><tr>{Object.keys(t2sql.filas[0]).map(k => <th key={k}>{k}</th>)}</tr></thead>
-              <tbody>{t2sql.filas.map((row, i) => (
-                <tr key={i}>{Object.entries(row).map(([k, v], j) => <td key={j}>{fmtCell(k, v)}</td>)}</tr>
-              ))}</tbody>
-            </table>
-          </div>
-        </>
-      )}
+      {t2sqlBlock}
       {viajes.length > 0 && (
         <>
           <div className="sec-lbl" style={{ marginTop: 12 }}>Viajes ({viajes.length})</div>
