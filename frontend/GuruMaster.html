@@ -257,6 +257,10 @@ button { cursor: pointer; font-family: var(--font); }
 .odo-stat { flex:1; background:var(--raised); border:1px solid var(--border); border-radius:var(--r-md); padding:10px 12px; text-align:center; }
 .odo-num { font-family:var(--mono); font-size:15px; font-weight:700; color:var(--teal-text); }
 .odo-lbl { font-size:9.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-3); margin-top:3px; line-height:1.3; }
+.panel-entry { margin-bottom:18px; padding-bottom:18px; border-bottom:1px solid var(--border); }
+.panel-entry:last-child { margin-bottom:0; padding-bottom:0; border-bottom:none; }
+.panel-entry-hd { margin-bottom:12px; display:flex; flex-direction:column; gap:6px; }
+.panel-entry-q { font-size:12px; color:var(--ink-2); line-height:1.45; font-style:italic; }
 </style>
 </head>
 <body>
@@ -1041,6 +1045,256 @@ function VizRenderer({ vizSpec, datosPanel }) {
 }
 
 /* ══════════════════════════════════════════
+   PANEL HISTORY — bloques acumulativos
+══════════════════════════════════════════ */
+function PanelEntryHeader({ pregunta, intent }) {
+  return (
+    <div className="panel-entry-hd">
+      {pregunta && <div className="panel-entry-q">{pregunta}</div>}
+      {intent && <span className={`itag itag-${intent}`}>{intent}</span>}
+    </div>
+  );
+}
+
+function hasEvidenciaContent(entry) {
+  return (entry.fuentes || []).some(f => f.tipo === 'documento');
+}
+
+function hasFinancieroContent(entry) {
+  const dp = entry.datos_panel;
+  const viajes = dp?.viajes || [];
+  const t2sql = dp?.query_dinamico;
+  return !!(
+    entry.metricas ||
+    viajes.length ||
+    t2sql?.filas?.length ||
+    dp?.viz_spec?.type ||
+    dp?.fleet_kpis?.length
+  );
+}
+
+function hasActivosPanelContent(entry) {
+  const dp = entry.datos_panel;
+  if (!dp || dp.tipo !== 'activos') return false;
+  return !!(
+    dp.mantenimientos?.length ||
+    dp.documentos?.length ||
+    dp.documentos_por_vencer?.length ||
+    dp.alertas?.length ||
+    dp.flota?.length ||
+    dp.viz_spec?.type
+  );
+}
+
+function EvidenciaPanelBlock({ entry }) {
+  const docFuentes = (entry.fuentes || []).filter(f => f.tipo === 'documento');
+  if (!docFuentes.length) return null;
+  return (
+    <>
+      <div className="sec-lbl">Fuentes documentales ({docFuentes.length})</div>
+      {docFuentes.map((f, i) => (
+        <div key={i} className="ev-card anim-up">
+          <div className="ev-hd">
+            <div className="ev-title">{f.nombre}</div>
+            {f.pilar && <span className="ev-pilar">{f.pilar.replace(/_/g, ' ')}</span>}
+          </div>
+          {f.contenido && <div className="ev-body">{f.contenido}</div>}
+        </div>
+      ))}
+    </>
+  );
+}
+
+function FinancieroPanelBlock({ entry, tweaks }) {
+  const dp = entry.datos_panel;
+  const metricas = entry.metricas;
+  const viajes = dp?.viajes || [];
+  const t2sql = dp?.query_dinamico;
+  if (!hasFinancieroContent(entry)) return null;
+
+  return (
+    <>
+      {dp?.viz_spec?.type && (
+        <div style={{ marginBottom: 14 }}>
+          <VizRenderer vizSpec={dp.viz_spec} datosPanel={dp} />
+        </div>
+      )}
+      {metricas && (
+        <>
+          <div className="sec-lbl">Resumen financiero</div>
+          <div className="metrics-grid">
+            <div className="metric-card"><div className="metric-lbl">Ingresos</div><div className="metric-val mv-acc">{fmtCOP(metricas.ingreso)}</div></div>
+            <div className="metric-card"><div className="metric-lbl">Gastos</div><div className="metric-val mv-neg">{fmtCOP(metricas.gastos)}</div></div>
+            <div className="metric-card"><div className="metric-lbl">Utilidad</div><div className={`metric-val ${metricas.utilidad >= 0 ? 'mv-pos' : 'mv-neg'}`}>{fmtCOP(metricas.utilidad)}</div></div>
+            <div className="metric-card"><div className="metric-lbl">Margen</div><div className={`metric-val ${metricas.margen_pct >= 0 ? 'mv-pos' : 'mv-neg'}`}>{metricas.margen_pct}%</div></div>
+          </div>
+        </>
+      )}
+      {metricas && (() => {
+        const fleetKpis = dp?.fleet_kpis || [];
+        const gastos = dp?.rentabilidad?.gastos_operativos || dp?.resumen?.gastos_detalle;
+        const ingresosObj = viajes.length > 0
+          ? Object.fromEntries(
+              viajes.slice(0, 6).map(v => [
+                v.ciudad_origen && v.ciudad_destino
+                  ? `${v.ciudad_origen.slice(0, 3)}→${v.ciudad_destino.slice(0, 3)} ${(v.fecha_viaje || '').slice(5)}`
+                  : v.viaje_id,
+                v.ingreso,
+              ])
+            )
+          : null;
+
+        if (fleetKpis.length > 0 && entry.intent === 'mixta') {
+          const totals = {
+            ingresos_total: fleetKpis.reduce((s, v) => s + v.ingresos, 0),
+            gastos_total: fleetKpis.reduce((s, v) => s + v.gastos, 0),
+            utilidad_total: fleetKpis.reduce((s, v) => s + v.utilidad, 0),
+            margen_promedio: fleetKpis.reduce((s, v) => s + v.margen_pct, 0) / fleetKpis.length,
+          };
+          return (
+            <FleetCockpit
+              vehicles={fleetKpis}
+              totals={totals}
+              risk={dp?.doc_risk || {}}
+              alerts={dp?.alertas_criticas || []}
+            />
+          );
+        }
+
+        if (dp?.viz_spec?.type) return null;
+
+        const hint = dp?.chart_hint || 'comparativo';
+        const showIngresos = (hint === 'ingresos' || hint === 'comparativo') && ingresosObj;
+        const showGastos = (hint === 'gastos' || hint === 'comparativo') && gastos && Object.keys(gastos).length > 0;
+        return (
+          <>
+            {showIngresos && (
+              <>
+                <div className="sec-lbl" style={{ marginTop: 12 }}>Ingresos por viaje</div>
+                <GastoBarChart gastos={ingresosObj} darkMode={tweaks.darkMode} barColor="rgba(13,127,110,.75)" />
+              </>
+            )}
+            {showGastos && (
+              <>
+                <div className="sec-lbl" style={{ marginTop: showIngresos ? 8 : 12 }}>Gastos por categoría</div>
+                <GastoBarChart gastos={gastos} darkMode={tweaks.darkMode} barColor="rgba(220,38,38,.6)" />
+              </>
+            )}
+          </>
+        );
+      })()}
+      {t2sql?.filas?.length > 0 && (
+        <>
+          <div className="sec-lbl" style={{ marginTop: 12 }}>Resultado de consulta</div>
+          <div className="t2sql-box">
+            <div className="t2sql-sql">{t2sql.sql}</div>
+            <table className="dtable" style={{ marginTop: 8 }}>
+              <thead><tr>{Object.keys(t2sql.filas[0]).map(k => <th key={k}>{k}</th>)}</tr></thead>
+              <tbody>{t2sql.filas.map((row, i) => (
+                <tr key={i}>{Object.entries(row).map(([k, v], j) => <td key={j}>{fmtCell(k, v)}</td>)}</tr>
+              ))}</tbody>
+            </table>
+          </div>
+        </>
+      )}
+      {viajes.length > 0 && (
+        <>
+          <div className="sec-lbl" style={{ marginTop: 12 }}>Viajes ({viajes.length})</div>
+          <table className="dtable">
+            <thead><tr><th>Fecha</th><th>Vehículo</th><th>Ruta</th><th>Ingreso</th><th>Estado</th></tr></thead>
+            <tbody>{viajes.map((v, i) => (
+              <tr key={i}>
+                <td>{v.fecha_viaje}</td>
+                <td style={{ fontFamily: 'var(--mono)', fontWeight: 600 }}>{v.vehiculo_id}</td>
+                <td>{v.ciudad_origen && v.ciudad_destino ? `${v.ciudad_origen}→${v.ciudad_destino}` : v.ruta_id || '—'}</td>
+                <td style={{ color: 'var(--teal-text)', fontWeight: 600 }}>{fmtCOP(v.ingreso)}</td>
+                <td><span className={`badge-nivel ${v.estado_viaje === 'Completado' ? 'vigente' : 'media'}`}>{v.estado_viaje}</span></td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </>
+      )}
+    </>
+  );
+}
+
+function ActivosPanelBlock({ entry }) {
+  const dp = entry.datos_panel;
+  if (!hasActivosPanelContent(entry)) return null;
+
+  const mants = dp.mantenimientos || [];
+  const docs = dp.documentos || [];
+  const docVencer = dp.documentos_por_vencer || [];
+
+  return (
+    <>
+      {dp?.viz_spec?.type && (
+        <div style={{ marginBottom: 14 }}>
+          <VizRenderer vizSpec={dp.viz_spec} datosPanel={dp} />
+        </div>
+      )}
+      {mants.length > 0 && (
+        <>
+          <div className="sec-lbl">Historial de mantenimiento ({mants.length})</div>
+          <table className="dtable">
+            <thead><tr><th>Fecha</th><th>Tipo</th><th>Categoría</th><th>Valor</th><th>Proveedor</th></tr></thead>
+            <tbody>{mants.map((m, i) => (
+              <tr key={i}>
+                <td style={{ whiteSpace: 'nowrap' }}>{m.fecha_mantenimiento}</td>
+                <td><span className={`badge-nivel ${m.tipo_mantenimiento === 'Preventivo' ? 'vigente' : 'alta'}`}>{m.tipo_mantenimiento}</span></td>
+                <td>{m.categoria_mantenimiento}</td>
+                <td style={{ color: 'var(--ink-2)', fontWeight: 600 }}>{fmtCOP(m.valor)}</td>
+                <td style={{ color: 'var(--ink-3)' }}>{m.proveedor || '—'}</td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </>
+      )}
+      {docs.length > 0 && (
+        <>
+          <div className="sec-lbl" style={{ marginTop: 12 }}>Documentos del vehículo ({docs.length})</div>
+          <table className="dtable">
+            <thead><tr><th>Documento</th><th>Estado</th><th>Vencimiento</th><th>Días</th></tr></thead>
+            <tbody>{docs.map((d, i) => {
+              const dias = d.dias_restantes;
+              const urg = dias == null ? 'baja' : dias < 0 ? 'vencido' : dias <= 7 ? 'critica' : dias <= 15 ? 'urgente' : dias <= 30 ? 'proximo' : 'vigente';
+              return (
+                <tr key={i}>
+                  <td>{d.tipo_documento}</td>
+                  <td><span className={`badge-nivel ${urg}`}>{d.estado}</span></td>
+                  <td style={{ whiteSpace: 'nowrap' }}>{d.fecha_vencimiento || '—'}</td>
+                  <td style={{ color: dias < 0 ? 'var(--danger)' : dias <= 30 ? 'var(--warn)' : 'var(--ink-2)', fontWeight: 600 }}>
+                    {dias == null ? '—' : dias < 0 ? `Vencido ${Math.abs(dias)}d` : `${dias}d`}
+                  </td>
+                </tr>
+              );
+            })}</tbody>
+          </table>
+        </>
+      )}
+      {docVencer.length > 0 && (
+        <>
+          <div className="sec-lbl" style={{ marginTop: 12 }}>Documentos por vencer — flota ({docVencer.length})</div>
+          <table className="dtable">
+            <thead><tr><th>Placa</th><th>Documento</th><th>Urgencia</th><th>Vencimiento</th></tr></thead>
+            <tbody>{docVencer.map((d, i) => (
+              <tr key={i}>
+                <td style={{ fontFamily: 'var(--mono)', fontWeight: 600 }}>{d.placa}</td>
+                <td>{d.tipo_documento}</td>
+                <td><span className={`badge-nivel ${d.urgencia}`}>{d.urgencia}</span></td>
+                <td style={{ whiteSpace: 'nowrap', color: d.dias_restantes < 0 ? 'var(--danger)' : 'var(--ink-2)' }}>
+                  {d.dias_restantes < 0 ? `Vencido hace ${Math.abs(d.dias_restantes)}d` : `${d.dias_restantes}d (${d.fecha_vencimiento})`}
+                </td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </>
+      )}
+    </>
+  );
+}
+
+/* ══════════════════════════════════════════
    APP
 ══════════════════════════════════════════ */
 function App() {
@@ -1053,12 +1307,12 @@ function App() {
   const [activeTab, setActiveTab]= useState('evidencia');
   const [alerts, setAlerts]      = useState([]);
   const [online, setOnline]      = useState(null);
-  const [lastResp, setLastResp]  = useState(null);
   const [loadingPhase, setLoadingPhase] = useState(0);
   const [odoData, setOdoData]    = useState(null);
   const [vehicles, setVehicles]  = useState([]);
 
   const endRef    = useRef(null);
+  const panelEndRef = useRef(null);
   const inputRef  = useRef(null);
   const phaseT1   = useRef(null);
   const phaseT2   = useRef(null);
@@ -1087,6 +1341,9 @@ function App() {
   }, []);
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior:'smooth' }); }, [msgs, loading]);
+  useEffect(() => {
+    if (!loading) panelEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [msgs.length, loading]);
 
   useEffect(() => {
     if (!selVeh) { setOdoData(null); return; }
@@ -1118,11 +1375,21 @@ function App() {
       });
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const data = await res.json();
-      setLastResp(data);
       setOnline(true);
       const i = data.intencion;
       setActiveTab(i === 'financiera' || (i === 'mixta' && data.metricas) ? 'financiero' : i === 'activos' ? 'activos' : 'evidencia');
-      setMsgs(prev => [...prev, { id: Date.now()+1, role:'guru', text: data.respuesta, intent: data.intencion, confianza: data.confianza, fuentes: data.fuentes||[], metricas: data.metricas||null, advertencias: data.advertencias||[] }]);
+      setMsgs(prev => [...prev, {
+        id: Date.now() + 1,
+        role: 'guru',
+        text: data.respuesta,
+        pregunta: q,
+        intent: data.intencion,
+        confianza: data.confianza,
+        fuentes: data.fuentes || [],
+        metricas: data.metricas || null,
+        datos_panel: data.datos_panel || null,
+        advertencias: data.advertencias || [],
+      }]);
     } catch(err) {
       setMsgs(prev => [...prev, { id: Date.now()+1, role:'guru', isErr: true, text: 'No pude conectar con el backend.\n\nVerifica que el servidor corra con: **uvicorn main:app --reload** en la carpeta /backend.', intent:null, confianza:null, fuentes:[], metricas:null, advertencias:[] }]);
     } finally {
@@ -1132,8 +1399,12 @@ function App() {
     }
   }
 
-  const docFuentes = (lastResp?.fuentes||[]).filter(f => f.tipo === 'documento');
-  const metricas   = lastResp?.metricas || null;
+  const guruEntries = msgs.filter(m => m.role === 'guru' && !m.isErr);
+  const evidenciaEntries = guruEntries.filter(hasEvidenciaContent);
+  const financieroEntries = guruEntries.filter(hasFinancieroContent);
+  const activosEntries = guruEntries.filter(hasActivosPanelContent);
+  const lastGuru = [...guruEntries].reverse()[0] || null;
+  const metricas = lastGuru?.metricas || null;
 
   return (
     <div className="app-shell">
@@ -1275,227 +1546,89 @@ function App() {
           <div className="panel-body">
 
             {activeTab === 'evidencia' && (
-              docFuentes.length === 0
+              evidenciaEntries.length === 0
                 ? <div className="empty-state"><div className="empty-ico">📄</div><div className="empty-title">Sin evidencia documental</div><div className="empty-sub">Pregunta sobre normatividad, SICE-TAC o RNDC para ver fuentes aquí.</div></div>
-                : <>
-                    <div className="sec-lbl">Fuentes documentales ({docFuentes.length})</div>
-                    {docFuentes.map((f,i) => (
-                      <div key={i} className="ev-card anim-up">
-                        <div className="ev-hd">
-                          <div className="ev-title">{f.nombre}</div>
-                          {f.pilar && <span className="ev-pilar">{f.pilar.replace(/_/g,' ')}</span>}
-                        </div>
-                        {f.contenido && <div className="ev-body">{f.contenido}</div>}
-                      </div>
-                    ))}
-                  </>
+                : evidenciaEntries.map(entry => (
+                    <div key={entry.id} className="panel-entry anim-up">
+                      <PanelEntryHeader pregunta={entry.pregunta} intent={entry.intent} />
+                      <EvidenciaPanelBlock entry={entry} />
+                    </div>
+                  ))
             )}
 
-            {activeTab === 'financiero' && (() => {
-              const dp = lastResp?.datos_panel;
-              const viajes = dp?.viajes || [];
-              const rent = dp?.rentabilidad;
-              const t2sql = dp?.query_dinamico;
-              const hasViz = !!dp?.viz_spec?.type;
-              return !metricas && !viajes.length && !t2sql && !hasViz
+            {activeTab === 'financiero' && (
+              financieroEntries.length === 0
                 ? <div className="empty-state"><div className="empty-ico">💰</div><div className="empty-title">Sin datos financieros</div><div className="empty-sub">Pregunta por rentabilidad de un viaje o costos del mes.</div></div>
-                : <>
-                    {dp?.viz_spec?.type && (
-                      <div style={{ marginBottom: 14 }}>
-                        <VizRenderer vizSpec={dp.viz_spec} datosPanel={dp} />
-                      </div>
-                    )}
-                    {metricas && <>
-                      <div className="sec-lbl">Resumen financiero</div>
-                      <div className="metrics-grid">
-                        <div className="metric-card"><div className="metric-lbl">Ingresos</div><div className="metric-val mv-acc">{fmtCOP(metricas.ingreso)}</div></div>
-                        <div className="metric-card"><div className="metric-lbl">Gastos</div><div className="metric-val mv-neg">{fmtCOP(metricas.gastos)}</div></div>
-                        <div className="metric-card"><div className="metric-lbl">Utilidad</div><div className={`metric-val ${metricas.utilidad>=0?'mv-pos':'mv-neg'}`}>{fmtCOP(metricas.utilidad)}</div></div>
-                        <div className="metric-card"><div className="metric-lbl">Margen</div><div className={`metric-val ${metricas.margen_pct>=0?'mv-pos':'mv-neg'}`}>{metricas.margen_pct}%</div></div>
-                      </div>
-                    </>}
-                    {metricas && (() => {
-                      const dp        = lastResp?.datos_panel;
-                      const fleetKpis = dp?.fleet_kpis || [];
-                      const gastos    = dp?.rentabilidad?.gastos_operativos || dp?.resumen?.gastos_detalle;
-                      const ingresosObj = (dp?.viajes || []).length > 0
-                        ? Object.fromEntries(
-                            (dp.viajes).slice(0,6).map(v => [
-                              v.ciudad_origen && v.ciudad_destino
-                                ? `${v.ciudad_origen.slice(0,3)}→${v.ciudad_destino.slice(0,3)} ${(v.fecha_viaje||'').slice(5)}`
-                                : v.viaje_id,
-                              v.ingreso
-                            ])
-                          )
-                        : null;
+                : financieroEntries.map(entry => (
+                    <div key={entry.id} className="panel-entry anim-up">
+                      <PanelEntryHeader pregunta={entry.pregunta} intent={entry.intent} />
+                      <FinancieroPanelBlock entry={entry} tweaks={tweaks} />
+                    </div>
+                  ))
+            )}
 
-                      // ── Vista KPI de flota (FleetCockpit) — solo intención mixta ──
-                      if (fleetKpis.length > 0 && lastResp?.intencion === 'mixta') {
-                        const totals = {
-                          ingresos_total:  fleetKpis.reduce((s,v) => s + v.ingresos, 0),
-                          gastos_total:    fleetKpis.reduce((s,v) => s + v.gastos, 0),
-                          utilidad_total:  fleetKpis.reduce((s,v) => s + v.utilidad, 0),
-                          margen_promedio: fleetKpis.reduce((s,v) => s + v.margen_pct, 0) / fleetKpis.length,
-                        };
-                        return <FleetCockpit
-                          vehicles={fleetKpis}
-                          totals={totals}
-                          risk={dp?.doc_risk || {}}
-                          alerts={dp?.alertas_criticas || []}
-                        />;
-                      }
-
-                      // Vista financiera estándar (fallback sin viz_spec)
-                      if (dp?.viz_spec?.type) return null;
-
-                      const hint = dp?.chart_hint || 'comparativo';
-                      const showIngresos = (hint === 'ingresos' || hint === 'comparativo') && ingresosObj;
-                      const showGastos   = (hint === 'gastos'   || hint === 'comparativo') && gastos && Object.keys(gastos).length > 0;
-                      return <>
-                        {showIngresos && <>
-                          <div className="sec-lbl" style={{marginTop:12}}>Ingresos por viaje</div>
-                          <GastoBarChart gastos={ingresosObj} darkMode={tweaks.darkMode} barColor="rgba(13,127,110,.75)"/>
-                        </>}
-                        {showGastos && <>
-                          <div className="sec-lbl" style={{marginTop: showIngresos ? 8 : 12}}>Gastos por categoría</div>
-                          <GastoBarChart gastos={gastos} darkMode={tweaks.darkMode} barColor="rgba(220,38,38,.6)"/>
-                        </>}
-                      </>;
-                    })()}
-                    {t2sql?.filas?.length > 0 && <>
-                      <div className="sec-lbl" style={{marginTop:12}}>Resultado de consulta</div>
-                      <div className="t2sql-box">
-                        <div className="t2sql-sql">{t2sql.sql}</div>
-                        <table className="dtable" style={{marginTop:8}}>
-                          <thead><tr>{Object.keys(t2sql.filas[0]).map(k=><th key={k}>{k}</th>)}</tr></thead>
-                          <tbody>{t2sql.filas.map((row,i)=><tr key={i}>{Object.entries(row).map(([k,v],j)=><td key={j}>{fmtCell(k,v)}</td>)}</tr>)}</tbody>
-                        </table>
-                      </div>
-                    </>}
-                    {viajes.length > 0 && <>
-                      <div className="sec-lbl" style={{marginTop:12}}>Viajes ({viajes.length})</div>
-                      <table className="dtable">
-                        <thead><tr><th>Fecha</th><th>Vehículo</th><th>Ruta</th><th>Ingreso</th><th>Estado</th></tr></thead>
-                        <tbody>{viajes.map((v,i)=>(
-                          <tr key={i}>
-                            <td>{v.fecha_viaje}</td>
-                            <td style={{fontFamily:'var(--mono)',fontWeight:600}}>{v.vehiculo_id}</td>
-                            <td>{v.ciudad_origen&&v.ciudad_destino?`${v.ciudad_origen}→${v.ciudad_destino}`:v.ruta_id||'—'}</td>
-                            <td style={{color:'var(--teal-text)',fontWeight:600}}>{fmtCOP(v.ingreso)}</td>
-                            <td><span className={`badge-nivel ${v.estado_viaje==='Completado'?'vigente':'media'}`}>{v.estado_viaje}</span></td>
-                          </tr>
-                        ))}</tbody>
-                      </table>
-                    </>}
-                  </>;
-            })()}
-
-            {activeTab === 'activos' && (() => {
-              const dp = lastResp?.datos_panel;
-              const mants = dp?.mantenimientos || [];
-              const docs  = dp?.documentos    || [];
-              const docVencer = dp?.documentos_por_vencer || [];
-              const alertas = dp?.alertas     || [];
-              const flota   = dp?.flota       || [];
-              const hasPanelData = dp?.tipo === 'activos';
-
-              return <>
+            {activeTab === 'activos' && (
+              <>
                 {selVeh && odoData && odoData.length > 0 && (() => {
                   const lastKm = odoData[0].kilometraje;
-                  const nextMaint = mants.find(m => m.proximo_mantenimiento_km > 0);
+                  const latestMants = activosEntries.length
+                    ? (activosEntries[activosEntries.length - 1].datos_panel?.mantenimientos || [])
+                    : [];
+                  const nextMaint = latestMants.find(m => m.proximo_mantenimiento_km > 0);
                   const kmFaltantes = nextMaint ? nextMaint.proximo_mantenimiento_km - lastKm : null;
-                  return <>
-                    <div className="sec-lbl">Odómetro</div>
-                    <div className="odo-card">
-                      <div className="odo-stat">
-                        <div className="odo-num">{lastKm.toLocaleString('es-CO')} km</div>
-                        <div className="odo-lbl">Último registro<br/>{odoData[0].fecha_registro}</div>
-                      </div>
-                      {kmFaltantes !== null && (
+                  return (
+                    <>
+                      <div className="sec-lbl">Odómetro</div>
+                      <div className="odo-card">
                         <div className="odo-stat">
-                          <div className="odo-num" style={{color: kmFaltantes < 5000 ? 'var(--warn)' : 'var(--teal-text)'}}>
-                            {kmFaltantes > 0 ? `+${kmFaltantes.toLocaleString('es-CO')} km` : 'Vencido'}
-                          </div>
-                          <div className="odo-lbl">Próx. mant.<br/>{nextMaint.categoria_mantenimiento}</div>
+                          <div className="odo-num">{lastKm.toLocaleString('es-CO')} km</div>
+                          <div className="odo-lbl">Último registro<br/>{odoData[0].fecha_registro}</div>
                         </div>
-                      )}
-                    </div>
-                  </>;
-                })()}
-                {hasPanelData && mants.length > 0 && <>
-                  <div className="sec-lbl">Historial de mantenimiento ({mants.length})</div>
-                  <table className="dtable">
-                    <thead><tr><th>Fecha</th><th>Tipo</th><th>Categoría</th><th>Valor</th><th>Proveedor</th></tr></thead>
-                    <tbody>{mants.map((m,i)=>(
-                      <tr key={i}>
-                        <td style={{whiteSpace:'nowrap'}}>{m.fecha_mantenimiento}</td>
-                        <td><span className={`badge-nivel ${m.tipo_mantenimiento==='Preventivo'?'vigente':'alta'}`}>{m.tipo_mantenimiento}</span></td>
-                        <td>{m.categoria_mantenimiento}</td>
-                        <td style={{color:'var(--ink-2)',fontWeight:600}}>{fmtCOP(m.valor)}</td>
-                        <td style={{color:'var(--ink-3)'}}>{m.proveedor||'—'}</td>
-                      </tr>
-                    ))}</tbody>
-                  </table>
-                </>}
-
-                {hasPanelData && docs.length > 0 && <>
-                  <div className="sec-lbl" style={{marginTop:12}}>Documentos del vehículo ({docs.length})</div>
-                  <table className="dtable">
-                    <thead><tr><th>Documento</th><th>Estado</th><th>Vencimiento</th><th>Días</th></tr></thead>
-                    <tbody>{docs.map((d,i)=>{
-                      const dias = d.dias_restantes;
-                      const urg = dias==null?'baja':dias<0?'vencido':dias<=7?'critica':dias<=15?'urgente':dias<=30?'proximo':'vigente';
-                      return <tr key={i}>
-                        <td>{d.tipo_documento}</td>
-                        <td><span className={`badge-nivel ${urg}`}>{d.estado}</span></td>
-                        <td style={{whiteSpace:'nowrap'}}>{d.fecha_vencimiento||'—'}</td>
-                        <td style={{color:dias<0?'var(--danger)':dias<=30?'var(--warn)':'var(--ink-2)',fontWeight:600}}>
-                          {dias==null?'—':dias<0?`Vencido ${Math.abs(dias)}d`:`${dias}d`}
-                        </td>
-                      </tr>;
-                    })}</tbody>
-                  </table>
-                </>}
-
-                {hasPanelData && docVencer.length > 0 && <>
-                  <div className="sec-lbl" style={{marginTop:12}}>Documentos por vencer — flota ({docVencer.length})</div>
-                  <table className="dtable">
-                    <thead><tr><th>Placa</th><th>Documento</th><th>Urgencia</th><th>Vencimiento</th></tr></thead>
-                    <tbody>{docVencer.map((d,i)=>(
-                      <tr key={i}>
-                        <td style={{fontFamily:'var(--mono)',fontWeight:600}}>{d.placa}</td>
-                        <td>{d.tipo_documento}</td>
-                        <td><span className={`badge-nivel ${d.urgencia}`}>{d.urgencia}</span></td>
-                        <td style={{whiteSpace:'nowrap',color:d.dias_restantes<0?'var(--danger)':'var(--ink-2)'}}>
-                          {d.dias_restantes<0?`Vencido hace ${Math.abs(d.dias_restantes)}d`:`${d.dias_restantes}d (${d.fecha_vencimiento})`}
-                        </td>
-                      </tr>
-                    ))}</tbody>
-                  </table>
-                </>}
-
-                {!hasPanelData && <>
-                  <div className="sec-lbl">Alertas próximos 30 días ({alerts.length})</div>
-                  {alerts.length === 0
-                    ? <div style={{fontSize:12,color:'var(--ink-3)'}}>Sin alertas activas.</div>
-                    : alerts.slice(0,20).map((a,i) => (
-                        <div key={i} className={`alert-item al-${a.urgencia}`}>
-                          <div className={`al-dot dot-${a.urgencia}`}/>
-                          <div>
-                            <div style={{display:'flex',gap:6,alignItems:'center',marginBottom:2}}>
-                              <span className="al-placa">{a.placa}</span>
-                              <span style={{fontSize:9.5,textTransform:'uppercase',color:'var(--ink-3)',letterSpacing:'.04em'}}>{a.urgencia}</span>
+                        {kmFaltantes !== null && (
+                          <div className="odo-stat">
+                            <div className="odo-num" style={{ color: kmFaltantes < 5000 ? 'var(--warn)' : 'var(--teal-text)' }}>
+                              {kmFaltantes > 0 ? `+${kmFaltantes.toLocaleString('es-CO')} km` : 'Vencido'}
                             </div>
-                            <div className="al-tipo">{a.tipo_documento}</div>
-                            <div className="al-dias">{a.dias_restantes<0?`Vencido hace ${Math.abs(a.dias_restantes)} dias`:`Vence en ${a.dias_restantes} dias (${a.fecha_vencimiento})`}</div>
+                            <div className="odo-lbl">Próx. mant.<br/>{nextMaint.categoria_mantenimiento}</div>
                           </div>
-                        </div>
-                      ))
-                  }
-                </>}
-              </>;
-            })()}
+                        )}
+                      </div>
+                    </>
+                  );
+                })()}
+                {activosEntries.length === 0
+                  ? (
+                    <>
+                      <div className="sec-lbl">Alertas próximos 30 días ({alerts.length})</div>
+                      {alerts.length === 0
+                        ? <div style={{ fontSize: 12, color: 'var(--ink-3)' }}>Sin alertas activas.</div>
+                        : alerts.slice(0, 20).map((a, i) => (
+                            <div key={i} className={`alert-item al-${a.urgencia}`}>
+                              <div className={`al-dot dot-${a.urgencia}`} />
+                              <div>
+                                <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 2 }}>
+                                  <span className="al-placa">{a.placa}</span>
+                                  <span style={{ fontSize: 9.5, textTransform: 'uppercase', color: 'var(--ink-3)', letterSpacing: '.04em' }}>{a.urgencia}</span>
+                                </div>
+                                <div className="al-tipo">{a.tipo_documento}</div>
+                                <div className="al-dias">{a.dias_restantes < 0 ? `Vencido hace ${Math.abs(a.dias_restantes)} dias` : `Vence en ${a.dias_restantes} dias (${a.fecha_vencimiento})`}</div>
+                              </div>
+                            </div>
+                          ))
+                      }
+                    </>
+                  )
+                  : activosEntries.map(entry => (
+                      <div key={entry.id} className="panel-entry anim-up">
+                        <PanelEntryHeader pregunta={entry.pregunta} intent={entry.intent} />
+                        <ActivosPanelBlock entry={entry} />
+                      </div>
+                    ))
+                }
+              </>
+            )}
 
+            <div ref={panelEndRef} />
           </div>
         </div>
 
