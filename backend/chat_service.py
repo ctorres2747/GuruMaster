@@ -125,6 +125,12 @@ def chat(req: ChatRequest):
             "flota": a.get("flota") or [],
         }
     elif intencion in ("financiera", "mixta"):
+        viz_spec = entidades.get("viz_spec")
+        needs_fleet = (
+            not vehiculo_id
+            and isinstance(viz_spec, dict)
+            and viz_spec.get("data_key") == "fleet_kpis"
+        )
         datos_panel = {
             "tipo": "financiero",
             "vehiculo_id": vehiculo_id,
@@ -132,7 +138,7 @@ def chat(req: ChatRequest):
             "rentabilidad": sql_data.get("rentabilidad_vehiculo"),
             "resumen": sql_data.get("resumen_financiero"),
             "query_dinamico": sql_data.get("query_dinamico"),
-            "chart_hint": entidades.get("chart_hint") or "comparativo",
+            "viz_spec": viz_spec,
         }
         if intencion == "mixta":
             if sql_data.get("activos"):
@@ -143,6 +149,8 @@ def chat(req: ChatRequest):
             if not vehiculo_id:
                 datos_panel["fleet_kpis"] = query_fleet_kpis()
                 datos_panel["doc_risk"] = query_doc_risk_summary()
+        elif needs_fleet:
+            datos_panel["fleet_kpis"] = query_fleet_kpis()
 
     panel_disponible = datos_panel is not None and bool(sql_data)
 
