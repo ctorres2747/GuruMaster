@@ -2,7 +2,7 @@
 
 Copiloto inteligente para el sector transporte de carga en Colombia. Permite consultar normatividad, analizar rentabilidad de viajes, revisar costos operativos y controlar activos de flota usando lenguaje natural.
 
-## Estado actual (actualizado 2026-06-07) — MVP COMPLETO + MEJORAS POST-MVP
+## Estado actual (actualizado 2026-06-29) — MVP COMPLETO + VISUALIZACIÓN DINÁMICA
 
 ### ✅ Módulo 1 — RAG documental (COMPLETADO)
 
@@ -116,7 +116,7 @@ El motor orquesta RAG + SQL y conecta todo al endpoint `POST /chat`.
 
 | Archivo | Responsabilidad |
 |---|---|
-| `backend/schemas.py` | Modelos Pydantic: `ChatRequest`, `ChatResponse`, `Filtros`, `Metricas`, `SourceReference` |
+| `backend/schemas.py` | Modelos Pydantic: `ChatRequest`, `ChatResponse`, `Filtros`, `Metricas`, `VizSpec`, `SourceReference` |
 | `backend/context_builder.py` | Formatea RAG + SQL en texto estructurado para el LLM |
 | `backend/response_generator.py` | Llamada al LLM desacoplada; system prompt de GuruMaster Carga |
 | `backend/guardrails.py` | Advertencias cuando falta evidencia documental o datos SQL |
@@ -125,8 +125,8 @@ El motor orquesta RAG + SQL y conecta todo al endpoint `POST /chat`.
 
 | Archivo | Cambio |
 |---|---|
-| `backend/intent_classifier.py` | Reescrito con LLM (GPT-4o-mini) + extracción de entidades; fallback a keywords |
-| `backend/sql_service.py` | Agregadas: `query_trips_filtered`, `query_gastos_filtered`, `query_activos_context`, `query_vehicle_id_by_placa` |
+| `backend/intent_classifier.py` | LLM + extracción de entidades (`placa`, fechas, `viz_spec`); fallback a keywords; post-procesamiento `_resolve_viz_spec` / `_normalize_viz_spec` |
+| `backend/sql_service.py` | Agregadas: `query_trips_filtered`, `query_gastos_filtered`, `query_activos_context`, `query_vehicle_id_by_placa`, `query_fleet_kpis`, `query_doc_risk_summary` |
 | `backend/chat_service.py` | Reescrito: orquesta clasificador → RAG → SQL → contexto → LLM → guardrails |
 
 **Contrato del endpoint `POST /chat` (nuevo schema):**
@@ -160,7 +160,18 @@ El motor orquesta RAG + SQL y conecta todo al endpoint `POST /chat`.
     "utilidad": 7030000,
     "margen_pct": 37.2
   },
-  "advertencias": []
+  "advertencias": [],
+  "datos_panel": {
+    "tipo": "financiero",
+    "viz_spec": {
+      "type": "donut",
+      "title": "Gastos de ABC123 en mayo 2026",
+      "data_key": "gastos_operativos",
+      "color": "danger"
+    },
+    "viajes": [],
+    "rentabilidad": { "gastos_operativos": { "Combustible": 5200000 } }
+  }
 }
 ```
 
@@ -168,9 +179,26 @@ El motor orquesta RAG + SQL y conecta todo al endpoint `POST /chat`.
 
 - Usa `gpt-4o-mini` con `response_format: json_object` — entiende lenguaje natural colombiano, coloquialismos, falta de tildes, sinónimos
 - Extrae entidades: `placa` (formato colombiano ABC123 / ABC-123) y fechas relativas (`"este mes"`, `"la semana pasada"`, `"mayo"`) resueltas a fechas ISO
+- Extrae `viz_spec`: especificación del gráfico a mostrar en el panel (ver tabla abajo)
 - La placa extraída de la pregunta se resuelve automáticamente a `vehiculo_id` via `query_vehicle_id_by_placa`
 - Los filtros explícitos del request tienen prioridad sobre las entidades extraídas
-- Fallback a keywords si el LLM no responde
+- Fallback a keywords + `_resolve_viz_spec()` si el LLM no responde
+
+**Selección de gráfico (`viz_spec`) — reglas en `intent_classifier.py`:**
+
+| Pregunta / contexto | `type` | `data_key` | `color` |
+|---|---|---|---|
+| Normativa (ley, decreto, RNDC) | `null` | — | — |
+| Un vehículo + gastos/costos | `donut` | `gastos_operativos` | `danger` |
+| Comparar vehículos de la flota | `composed` | `fleet_kpis` | `teal` |
+| Tendencia en el tiempo | `line` / `area` | `viajes` | `teal` |
+| Ranking (mejor/peor/top) | `bar_h` | `fleet_kpis` | `warn` |
+| Margen o % específico | `radial` | `margen` | `warn` |
+| Financiero genérico | `bar` | `resumen` | `teal` |
+
+Campos de `viz_spec`: `type`, `title` (descriptivo en español colombiano, ej. "Gastos de ABC123 en mayo 2026"), `data_key`, `color`.
+Post-procesamiento: `_normalize_viz_spec()` corrige desajustes frecuentes del LLM.
+Modelo Pydantic: `VizSpec` en `backend/schemas.py`.
 
 **Rutas de fuentes por intención:**
 
@@ -196,10 +224,11 @@ El motor orquesta RAG + SQL y conecta todo al endpoint `POST /chat`.
 - El LLM recibe schema completo (columnas exactas via `PRAGMA table_info`) para evitar errores
 - Resultado se agrega a `sql_data["query_dinamico"]` y se incluye en `datos_panel`
 
-**Nuevo campo `datos_panel` en ChatResponse:**
-- Lleva datos estructurados (listas de dicts) al frontend para renderizado en tablas
-- `tipo: "financiero"` → `viajes[]`, `rentabilidad`, `resumen`, `query_dinamico`
-- `tipo: "activos"` → `mantenimientos[]`, `documentos[]`, `alertas[]`, `documentos_por_vencer[]`, `flota[]`
+**Campo `datos_panel` en ChatResponse:**
+- Lleva datos estructurados al frontend para renderizado en el panel central
+- `tipo: "financiero"` → `viajes[]`, `rentabilidad`, `resumen`, `query_dinamico`, `viz_spec`, `fleet_kpis[]`, `doc_risk`, `alertas_criticas[]`
+- `tipo: "activos"` → `mantenimientos[]`, `documentos[]`, `alertas[]`, `documentos_por_vencer[]`, `flota[]`, `viz_spec`
+- `fleet_kpis` se carga cuando `viz_spec.data_key == "fleet_kpis"` **o** intención `mixta` sin vehículo — incluso si hay placa seleccionada en el dropdown (consultas de flota)
 - Cuando `panel_disponible=True`, el LLM usa un template corto (2-3 líneas + "→ Ver detalle en el panel central")
 
 **Decisiones de diseño del Módulo 4:**
@@ -209,9 +238,11 @@ El motor orquesta RAG + SQL y conecta todo al endpoint `POST /chat`.
 - 2 llamadas LLM por `/chat`: clasificador + generador de respuesta (3 cuando T2SQL activo)
 - `query_vehicle_profitability` filtra gastos por viajes completados (consistencia con ingresos)
 
-### ✅ Módulo 5 — Frontend (COMPLETADO + ACTUALIZADO)
+### ✅ Módulo 5 — Frontend (COMPLETADO + VISUALIZACIÓN DINÁMICA)
 
-**Archivo:** `frontend/GuruMaster.html` — single-file React 18 (CDN + Babel Standalone).
+**Archivo:** `frontend/GuruMaster.html` — single-file React 18 (CDN + Babel Standalone + Recharts).
+
+**CDNs requeridos:** React 18, ReactDOM, Babel Standalone, Lucide, **prop-types** (peer de Recharts), **Recharts 2.12**.
 
 **Para abrir:** doble clic en `iniciar_gurumaster.bat` — levanta el backend y abre `http://localhost:8000` en el navegador. El frontend se sirve directamente desde FastAPI (sin CORS, misma origin).
 
@@ -223,9 +254,9 @@ El motor orquesta RAG + SQL y conecta todo al endpoint `POST /chat`.
 
 | Panel | Ancho | Contenido |
 |---|---|---|
-| Izquierdo | 370px | Chat: mensajes, input, chips de sugerencias |
-| Central | flex | Tabs: Evidencia / Financiero / Activos |
-| Derecho | 268px | KPIs, vehículo activo, resumen alertas, fleet list |
+| Izquierdo | 370px | Chat: historial de mensajes, input, chips de sugerencias |
+| Central | flex | Tabs: Evidencia / Financiero / Activos — **historial acumulativo** por consulta |
+| Derecho | 268px | KPIs última consulta, vehículo activo, resumen alertas, fleet list |
 
 **Header:**
 - Logo GuruMaster Carga Colombia
@@ -235,48 +266,68 @@ El motor orquesta RAG + SQL y conecta todo al endpoint `POST /chat`.
 
 **Chat (panel izquierdo):**
 - `POST /chat` con payload `{pregunta, filtros: {vehiculo_id}}` (vehiculo_id incluido si hay vehículo seleccionado)
-- Loading dots (animación dot-blink) mientras espera respuesta
-- Cada mensaje Guru muestra: respuesta formateada con `GuruText` + badge de intención coloreado (`normativa`/`financiera`/`activos`/`mixta`) + % confianza + conteo de fuentes
+- Cada respuesta guru guarda en el mensaje: `pregunta`, `intent`, `metricas`, `datos_panel`, `fuentes`, `advertencias`
+- Loading dots + fases: "Clasificando pregunta…" / "Consultando fuentes…" / "Generando respuesta…"
+- Cada mensaje Guru muestra: respuesta formateada con `GuruText` + badge de intención coloreado + % confianza + conteo de fuentes
 - Warning banners para `advertencias[]` del backend
-- Burbujas de error con estilo diferenciado si el fetch falla
-- 3 chips de sugerencias rápidas en el footer (primeras 3 de SUGGESTIONS)
 
-**Panel central — 3 tabs (se cambia automáticamente según intención de la respuesta):**
-- **Evidencia** (activa para `normativa`): fuentes documentales del campo `fuentes[]` — título, pilar, primeros 300 chars del contenido
-- **Financiero** (activa para `financiera`/`mixta`): 4 KPI cards (Ingresos/Gastos/Utilidad/Margen) + tabla de viajes con columnas fecha/placa/ruta/ingreso/estado + tabla T2SQL (query dinámico) con headers generados automáticamente desde las columnas del resultado
-- **Activos** (activa para `activos`): tabla de historial de mantenimientos + tabla de documentos con badges de días (colores por urgencia: rojo=vencido/critico, naranja=urgente, amarillo=proximo, verde=vigente) + tabla de docs próximos a vencer de toda la flota; fallback a alertas genéricas si no hay `datos_panel`
+**Panel central — historial acumulativo (`panel-entry`):**
+Cada consulta agrega un bloque (no sobrescribe). Cada bloque muestra la pregunta original + badge de intención.
+
+| Tab | Contenido por bloque |
+|---|---|
+| **Evidencia** | `EvidenciaPanelBlock` — fuentes documentales de `fuentes[]` |
+| **Financiero** | Con `viz_spec`: solo `VizRenderer` + T2SQL si aplica. Sin `viz_spec`: KPI cards, `GastoBarChart`, tabla viajes, `FleetCockpit` (mixta sin gráfico) |
+| **Activos** | Odómetro del vehículo activo (fijo arriba) + `ActivosPanelBlock` por consulta (mantenimientos, documentos, docs por vencer, gráfico si hay `viz_spec`) |
+
+**Visualización dinámica — `VizRenderer` (7 tipos):**
+
+| `type` | Uso | Datos (`data_key`) |
+|---|---|---|
+| `donut` | Distribución de gastos por categoría | `gastos_operativos` |
+| `composed` | Barras ingresos/gastos + línea utilidad por placa | `fleet_kpis` |
+| `line` / `area` | Tendencia de ingresos en el tiempo | `viajes` |
+| `bar_h` | Ranking horizontal de utilidad | `fleet_kpis` |
+| `radial` | Gauge de margen % con etiqueta Bajo/Medio/Sano | `margen` |
+| `bar` | Barras verticales resumen | `resumen` |
+
+- `extractChartData(vizSpec, datosPanel)` mapea `data_key` → array para Recharts
+- Tokens CSS del design system (`--surface`, `--border`, `--teal`, `--danger`, `--warn`, etc.)
+- Tooltips unificados; valores monetarios con `fmtCOP()`; donut con leyenda de % por categoría
+- Estado vacío: "Sin datos para graficar"; `min-height` por tipo de gráfico
+
+**Componentes de visualización (no modificar sin motivo):**
+- `VizRenderer` — gráficos dinámicos según `viz_spec`
+- `FleetCockpit` — dashboard KPI de flota (mixta, sin `viz_spec`)
+- `GastoBarChart` — barras horizontales legacy (sin `viz_spec`)
 
 **Filosofía UI (split chat/panel):**
 - Chat (izquierdo): respuesta LLM corta de 2-3 líneas con número clave + "→ Ver detalle en el panel central"
-- Panel central: datos estructurados completos en tablas, renderizados directamente desde `datos_panel` sin pasar por el LLM
+- Panel central: historial de bloques por consulta; cada bloque muestra solo lo relevante a esa pregunta
 
 **Panel derecho:**
-- KPI rows de la última respuesta con métricas (colores: teal=ingresos, rojo=gastos, verde/rojo según signo para utilidad y margen)
+- KPI rows de la **última** respuesta financiera con métricas
 - Vehículo activo (placa, tipo, marca) si hay selección
-- Resumen de alertas agrupadas por nivel (vencido/critico/urgente/proximo) con conteo y colores
-- 3 sugerencias adicionales clickeables (últimas 3 de SUGGESTIONS) que envían la pregunta al chat
-- Fleet list: 5 vehículos con placa + marca, clickeables para seleccionar
+- Resumen de alertas agrupadas por nivel
+- Fleet list: 5 vehículos clickeables para seleccionar
 
-**Design system — idéntico al original:**
-- Mismas variables CSS: `--base`, `--surface`, `--raised`, `--border`, `--teal`, `--ink-1/2/3`, `--warn`, `--danger`, `--shadow-sm/md/lg`, `--r-sm/md/lg/xl`
-- Mismas fuentes: Inter (UI) + IBM Plex Mono (datos/placas)
+**Design system:**
+- Variables CSS: `--base`, `--surface`, `--raised`, `--border`, `--teal`, `--ink-1/2/3`, `--warn`, `--danger`, `--shadow-sm/md/lg`, `--r-sm/md/lg/xl`
+- Fuentes: Inter (UI) + IBM Plex Mono (`--mono`) para datos/placas
 - Dark mode vía `[data-theme="dark"]` en `<html>`
-- Animaciones: `slide-up`, `fade-in`, `dot-blink`, `pulse-live`
-- Componentes reutilizados: `Icon` (Lucide CDN), `GuruText` (markdown-lite), `LogoMark` (SVG hexagonal)
-- TweaksPanel simplificado (solo toggle dark mode, draggable)
+- Componentes: `Icon`, `GuruText`, `LogoMark`, `PanelEntryHeader`, `FinancieroPanelBlock`, `ActivosPanelBlock`, `EvidenciaPanelBlock`
 
 **Decisiones de diseño del Módulo 5:**
-- No hay datos mock — todo viene del backend real (si el backend está offline, muestra error en burbuja con instrucciones de arranque)
-- No hay selector de pilar — la IA clasifica la intención automáticamente
-- La placa del selector se incluye como `filtros.vehiculo_id` en el payload de `/chat`; la placa extraída por el LLM del texto de la pregunta tiene menor prioridad que el filtro explícito
-- El tab activo del panel central cambia automáticamente según `intencion` de la respuesta
-- El campo `fuentes[].contenido` viene truncado a 300 chars desde `chat_service.py`
-- Frontend servido desde FastAPI (mismo origen) — no se abre como `file://`; eliminado el problema de CORS con `null` origin
+- No hay datos mock — todo viene del backend real
+- La placa del selector se incluye como `filtros.vehiculo_id`; para consultas de **toda la flota**, deseleccionar placa o el backend carga `fleet_kpis` cuando `viz_spec` lo requiere
+- El tab activo cambia automáticamente según `intencion` de la respuesta
+- Con `viz_spec`: no repetir resumen KPI ni tabla de viajes en cada bloque del historial
+- Frontend servido desde FastAPI (mismo origen) — sin problema CORS con `null` origin
 
 ### Frontend MVP
 
-- `frontend/GuruMaster.html` — Dashboard React single-file. Servido por FastAPI en `GET /`. Chat muestra resumen corto; panel central muestra tablas detalladas desde `datos_panel`.
-- `iniciar_gurumaster.bat` — Script de arranque único: mata proceso en :8000, lanza uvicorn, abre navegador.
+- `frontend/GuruMaster.html` — Dashboard React single-file con historial de panel y gráficos dinámicos
+- `iniciar_gurumaster.bat` — Script de arranque único
 
 ## Producto
 
@@ -290,7 +341,7 @@ El motor orquesta RAG + SQL y conecta todo al endpoint `POST /chat`.
 
 | Capa | Herramienta |
 |---|---|
-| Frontend | React 18 (CDN/UMD), JSX/Babel Standalone, HTML5 — single-file |
+| Frontend | React 18 (CDN/UMD), JSX/Babel Standalone, Recharts 2.12, prop-types — single-file |
 | Backend | FastAPI (Python) |
 | Base estructurada | SQLite o DuckDB |
 | RAG / Vector DB | ChromaDB local |
@@ -412,13 +463,14 @@ Adaptar el frontend actual (activos industriales → vehículos/rutas):
 | Panel derecho | Telemetría industrial | Margen mensual, alertas, ranking de gastos |
 | Selector | Activos BOM/COM/HEX | Vehículos por placa y estado |
 
-## Escenarios de demo comercial (4 preguntas clave)
+## Escenarios de demo comercial
 
-1. **Rentabilidad:** "¿El viaje Medellín - Bogotá del vehículo ABC123 fue rentable?"
-2. **Normatividad:** "¿Qué debo tener en cuenta para registrar un despacho de carga?"
-3. **Costos:** "¿Cuánto gasté en combustible y peajes este mes?"
-4. **Activos:** "¿Qué vehículos tienen documentos próximos a vencer?"
-5. **Mixta:** "¿Este viaje se pagó bien comparado con los costos operativos de referencia?"
+1. **Rentabilidad:** "¿El viaje Medellín - Bogotá del vehículo ABC123 fue rentable?" → donut o radial
+2. **Normativa:** "¿Qué debo tener en cuenta para registrar un despacho de carga?" → tab Evidencia, sin gráfico
+3. **Costos:** "¿Cuánto gasté en combustible este mes?" → donut/bar + T2SQL
+4. **Activos:** "¿Qué vehículos tienen documentos próximos a vencer?" → tab Activos
+5. **Mixta / flota:** "Comparame los ingresos vs gastos de cada vehículo de la flota" → composed
+6. **KPIs flota:** "¿Cuáles son los KPIs de mi flota?" → FleetCockpit (mixta sin viz_spec)
 
 ## Roadmap de ejecución (4 semanas)
 
@@ -432,13 +484,16 @@ Adaptar el frontend actual (activos industriales → vehículos/rutas):
 ## Archivos relevantes
 
 **Backend — Motor de consulta (Módulo 4):**
-- `backend/schemas.py` — Pydantic: `ChatRequest`, `ChatResponse` (incluye `datos_panel: Optional[dict]`), `Filtros`, `Metricas`, `SourceReference`
-- `backend/intent_classifier.py` — `classify_intent(msg) → (str, float, dict)`: LLM-based, extrae placa + fechas, fallback a keywords
+- `backend/schemas.py` — Pydantic: `ChatRequest`, `ChatResponse`, `datos_panel`, `VizSpec`, `Filtros`, `Metricas`, `SourceReference`
+- `backend/intent_classifier.py` — `classify_intent(msg) → (str, float, dict)` con `viz_spec` en entidades; `_resolve_viz_spec`, `_normalize_viz_spec`
 - `backend/context_builder.py` — `build_context(rag_docs, sql_data) → str`: T2SQL primero, límite 6,000 chars
-- `backend/response_generator.py` — `generate_response(pregunta, context, panel_disponible) → str`: template corto cuando hay panel
-- `backend/guardrails.py` — `check(...) → list[str]`: advertencias por ausencia de fuentes o datos
-- `backend/chat_service.py` — orquestador: clasificador → RAG → SQL → T2SQL → datos_panel → LLM
-- `backend/text_to_sql.py` — `run_text_to_sql(pregunta) → dict`: GPT-4o-mini genera SELECT; solo para queries de flota sin vehiculo_id; bloquea comandos peligrosos
+- `backend/response_generator.py` — `generate_response(pregunta, context, panel_disponible) → str`
+- `backend/guardrails.py` — `check(...) → list[str]`
+- `backend/chat_service.py` — orquestador; arma `datos_panel` con `viz_spec`, `fleet_kpis`, `doc_risk`
+- `backend/text_to_sql.py` — `run_text_to_sql(pregunta) → dict`
+
+**Frontend — Visualización (Módulo 5):**
+- `frontend/GuruMaster.html` — `VizRenderer`, `extractChartData`, `FinancieroPanelBlock`, `ActivosPanelBlock`, `EvidenciaPanelBlock`, `FleetCockpit`, `GastoBarChart`
 
 **Backend — Datos estructurados (Módulos 2 y 3):**
 - `backend/main.py` — FastAPI app; sirve frontend en `GET /` vía FileResponse; CORS middleware que hace echo del origin (maneja `null`); `uvicorn main:app --port 8000` desde `/backend`
@@ -494,13 +549,27 @@ Adaptar el frontend actual (activos industriales → vehículos/rutas):
 | T2SQL truncado en intención mixta | Con límite 4,500 chars y contexto RAG + activos + financiero, el bloque T2SQL quedaba fuera | Mover T2SQL a primera posición en `_format_sql()` + subir límite a 6,000 |
 | Puerto 8000 ya en uso al relanzar | Proceso anterior seguía corriendo | `iniciar_gurumaster.bat` mata el proceso en :8000 antes de arrancar |
 
-## Próximos pasos — Mejoras visuales (prioridad alta)
+## Bugs corregidos (sesión 2026-06-29 — visualización dinámica)
 
-El MVP está funcional. La siguiente iteración debe continuar mejorando la salida visual de respuestas:
+| Bug | Causa raíz | Fix |
+|---|---|---|
+| `VizRenderer` no aparecía | Estaba anidado dentro de `metricas && (...)` | Mover renderizado al inicio del tab Financiero, independiente de métricas |
+| "Sin datos para graficar" en comparativo de flota | Con placa seleccionada no se cargaba `fleet_kpis` pero `viz_spec` pedía `data_key: fleet_kpis` | Cargar `fleet_kpis` cuando `viz_spec.data_key == "fleet_kpis"`, aunque haya `vehiculo_id` en filtros |
+| Resumen financiero y viajes repetidos en cada bloque | Historial acumulativo renderizaba todo `datos_panel` en cada entrada | Con `viz_spec`: solo gráfico + T2SQL; sin `viz_spec`: panel legacy completo |
+| Recharts no cargaba (`oneOfType`) | Faltaba CDN de `prop-types` (peer dependency) | Agregar `prop-types@15.8.1` antes de Recharts en `GuruMaster.html` |
+| `viz_spec` ausente en activos | Solo se incluía en `datos_panel` financiero/mixta | Agregar `viz_spec` al bloque `activos` en `chat_service.py` |
 
-1. **Panel central — Financiero:** agregar gráfico de barras (recharts o Chart.js CDN) para gastos por categoría del vehículo
-2. **Panel central — Activos:** mostrar odómetro del vehículo activo + próximo mantenimiento por km
-3. **Panel central — T2SQL:** mejorar renderizado de tablas dinámicas (formatear moneda automáticamente cuando la columna contiene "valor", "ingreso", "gasto", "total")
-4. **Chat:** agregar indicador visual del tipo de consulta que está procesando ("Consultando documentos... / Analizando datos SQL... / Generando respuesta...")
-5. **RAG — gestion_activos:** agregar documentos (guías SOAT, tecnomecánica, pólizas) para mejorar respuestas en preguntas de activos
-6. **Panel derecho:** agregar mini-chart de tendencia de margen (últimos 30 días) usando datos de `GET /api/analytics/monthly-summary`
+## Próximos pasos
+
+**Completados recientemente:**
+- ✅ Gráficos dinámicos con `viz_spec` + `VizRenderer` (7 tipos Recharts)
+- ✅ Historial acumulativo del panel central por consulta
+- ✅ `FleetCockpit` para KPIs de flota (mixta)
+- ✅ Odómetro + próximo mantenimiento en tab Activos
+- ✅ Indicador de fase en chat (clasificando / consultando / generando)
+- ✅ Formateo moneda en tablas T2SQL (`fmtCell`)
+
+**Pendientes (prioridad):**
+1. **RAG — gestion_activos:** agregar documentos (guías SOAT, tecnomecánica, pólizas)
+2. **Panel derecho:** mini-chart de tendencia de margen (últimos 30 días) vía `GET /api/analytics/monthly-summary`
+3. **Activos:** reglas `viz_spec` específicas para alertas/documentos (hoy hereda lógica financiera)
