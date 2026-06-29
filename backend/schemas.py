@@ -28,6 +28,14 @@ class Metricas(BaseModel):
     margen_pct: Optional[float] = None
 
 
+class VizSpec(BaseModel):
+    """Especificación de gráfico elegida por el clasificador de intención."""
+    type: Optional[str] = None       # donut|composed|line|area|bar_h|radial|bar
+    title: Optional[str] = None
+    data_key: Optional[str] = None   # gastos_operativos|viajes|fleet_kpis|margen|resumen
+    color: Optional[str] = None        # teal|danger|warn
+
+
 class ChatResponse(BaseModel):
     respuesta: str
     intencion: str

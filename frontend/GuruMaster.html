@@ -723,6 +723,323 @@ function GastoBarChart({ gastos, darkMode, barColor = 'rgba(13,127,110,.75)' }) 
 }
 
 /* ══════════════════════════════════════════
+   VIZ RENDERER — gráficos dinámicos (LLM)
+══════════════════════════════════════════ */
+const VIZ_MIN_H = {
+  donut: 240, pie: 240, composed: 260, line: 220, area: 220,
+  bar_h: 200, radial: 180, bar: 220,
+};
+const VIZ_ACCENT = { teal: 'var(--teal)', danger: 'var(--danger)', warn: 'var(--warn)' };
+const VIZ_PALETTE = ['var(--teal)', 'var(--danger)', 'var(--warn)', '#6366F1', '#EC4899', '#8B5CF6', '#14B8A6'];
+
+const vizTooltipStyle = {
+  background: 'var(--surface)',
+  border: '1px solid var(--border)',
+  borderRadius: 8,
+  fontSize: 11,
+  fontFamily: 'var(--font)',
+  color: 'var(--ink-1)',
+  padding: '6px 10px',
+  boxShadow: 'var(--shadow-sm)',
+};
+
+const vizTickStyle = { fontSize: 10, fill: 'var(--ink-3)', fontFamily: 'var(--mono)' };
+const vizGridStroke = 'var(--border)';
+
+function extractChartData(vizSpec, dp) {
+  if (!vizSpec || !dp) return [];
+  const key = vizSpec.data_key;
+
+  if (key === 'gastos_operativos') {
+    const g = dp.rentabilidad?.gastos_operativos || dp.resumen?.gastos_detalle;
+    if (!g || !Object.keys(g).length) return [];
+    return Object.entries(g)
+      .map(([name, value]) => ({ name, value: Number(value) || 0 }))
+      .filter(d => d.value > 0)
+      .sort((a, b) => b.value - a.value);
+  }
+
+  if (key === 'viajes') {
+    const viajes = dp.viajes || [];
+    if (!viajes.length) return [];
+    return [...viajes]
+      .sort((a, b) => (a.fecha_viaje || '').localeCompare(b.fecha_viaje || ''))
+      .map(v => {
+        const label = v.ciudad_origen && v.ciudad_destino
+          ? `${v.ciudad_origen}→${v.ciudad_destino}`
+          : (v.viaje_id || '');
+        const shortDate = (v.fecha_viaje || '').slice(5) || label;
+        return {
+          name: shortDate,
+          label,
+          ingreso: Number(v.ingreso) || 0,
+          gastos: Number(v.gastos_total) || 0,
+          utilidad: (Number(v.ingreso) || 0) - (Number(v.gastos_total) || 0),
+          value: Number(v.ingreso) || 0,
+        };
+      });
+  }
+
+  if (key === 'fleet_kpis') {
+    const fleet = dp.fleet_kpis || [];
+    if (!fleet.length) return [];
+    return fleet.map(v => ({
+      name: v.placa,
+      ingresos: Number(v.ingresos) || 0,
+      gastos: Number(v.gastos) || 0,
+      utilidad: Number(v.utilidad) || 0,
+      margen_pct: Number(v.margen_pct) || 0,
+      value: Number(v.utilidad) || 0,
+    }));
+  }
+
+  if (key === 'margen') {
+    const pct = dp.rentabilidad?.margen_pct ?? dp.resumen?.margen_pct;
+    if (pct == null) return [];
+    return [{ name: 'margen', value: Number(pct) }];
+  }
+
+  if (key === 'resumen') {
+    const r = dp.resumen || dp.rentabilidad;
+    if (!r) return [];
+    const rows = [
+      { name: 'Ingresos', value: Number(r.ingresos ?? r.ingresos_brutos) || 0 },
+      { name: 'Gastos', value: Number(r.total_gastos ?? r.gastos_total) || 0 },
+      { name: 'Utilidad', value: Number(r.utilidad ?? r.utilidad_neta) || 0 },
+    ];
+    return rows.filter(d => d.value !== 0);
+  }
+
+  return [];
+}
+
+function VizTooltip({ active, payload, label, valueFmt }) {
+  if (!active || !payload?.length) return null;
+  const fmt = valueFmt || (v => fmtCOP(v));
+  return (
+    <div style={vizTooltipStyle}>
+      {label && <div style={{ fontWeight: 600, marginBottom: 4, color: 'var(--ink-1)' }}>{label}</div>}
+      {payload.map((p, i) => (
+        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+          <span style={{ width: 8, height: 8, borderRadius: 2, background: p.color || p.fill, flexShrink: 0 }} />
+          <span style={{ color: 'var(--ink-2)' }}>{p.name}</span>
+          <span style={{ fontFamily: 'var(--mono)', fontWeight: 600, color: 'var(--ink-1)', marginLeft: 'auto' }}>
+            {fmt(p.value)}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function VizDonutLegend({ data }) {
+  const total = data.reduce((s, d) => s + d.value, 0) || 1;
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px', marginTop: 10, justifyContent: 'center' }}>
+      {data.map((d, i) => {
+        const pct = ((d.value / total) * 100).toFixed(1);
+        return (
+          <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10 }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: VIZ_PALETTE[i % VIZ_PALETTE.length], flexShrink: 0 }} />
+            <span style={{ color: 'var(--ink-2)' }}>{d.name}</span>
+            <span style={{ fontFamily: 'var(--mono)', fontWeight: 600, color: 'var(--ink-1)' }}>{pct}%</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function VizRenderer({ vizSpec, datosPanel }) {
+  const R = window.Recharts;
+  const type = (vizSpec?.type || 'bar').toLowerCase();
+  const minH = VIZ_MIN_H[type] || 220;
+  const accent = VIZ_ACCENT[vizSpec?.color] || 'var(--teal)';
+  const data = extractChartData(vizSpec, datosPanel);
+
+  const shellStyle = {
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
+    borderRadius: 'var(--r-lg)',
+    boxShadow: 'var(--shadow-sm)',
+    padding: '12px 14px',
+    minHeight: minH,
+    display: 'flex',
+    flexDirection: 'column',
+  };
+
+  if (!data.length) {
+    return (
+      <div style={{ ...shellStyle, alignItems: 'center', justifyContent: 'center' }}>
+        <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>Sin datos para graficar</span>
+      </div>
+    );
+  }
+
+  if (!R) {
+    return (
+      <div style={{ ...shellStyle, alignItems: 'center', justifyContent: 'center' }}>
+        <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>Recharts no disponible</span>
+      </div>
+    );
+  }
+
+  const {
+    ResponsiveContainer, PieChart, Pie, Cell,
+    ComposedChart, Bar, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip,
+    BarChart, RadialBarChart, RadialBar, PolarAngleAxis,
+  } = R;
+
+  const title = vizSpec?.title || 'Visualización';
+  const compactFmt = v => fmtCompact(v);
+
+  const renderChart = () => {
+    if (type === 'donut' || type === 'pie') {
+      const total = data.reduce((s, d) => s + d.value, 0) || 1;
+      return (
+        <>
+          <ResponsiveContainer width="100%" height={minH - 70}>
+            <PieChart>
+              <Pie
+                data={data}
+                dataKey="value"
+                nameKey="name"
+                cx="50%"
+                cy="50%"
+                innerRadius="52%"
+                outerRadius="78%"
+                paddingAngle={2}
+                isAnimationActive={false}
+              >
+                {data.map((_, i) => (
+                  <Cell key={i} fill={VIZ_PALETTE[i % VIZ_PALETTE.length]} stroke="var(--surface)" strokeWidth={2} />
+                ))}
+              </Pie>
+              <Tooltip
+                content={({ active, payload }) => {
+                  if (!active || !payload?.length) return null;
+                  const p = payload[0];
+                  const val = p.value;
+                  const pct = ((val / total) * 100).toFixed(1);
+                  return (
+                    <div style={vizTooltipStyle}>
+                      <div style={{ fontWeight: 600, color: 'var(--ink-1)' }}>{p.name}</div>
+                      <div style={{ marginTop: 3, color: 'var(--ink-2)' }}>{fmtCOP(val)} · {pct}%</div>
+                    </div>
+                  );
+                }}
+              />
+            </PieChart>
+          </ResponsiveContainer>
+          <VizDonutLegend data={data} />
+        </>
+      );
+    }
+
+    if (type === 'composed') {
+      const sorted = [...data].sort((a, b) => b.utilidad - a.utilidad);
+      return (
+        <ResponsiveContainer width="100%" height={minH - 36}>
+          <ComposedChart data={sorted} margin={{ top: 8, right: 12, left: 0, bottom: 4 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke={vizGridStroke} vertical={false} />
+            <XAxis dataKey="name" tick={vizTickStyle} axisLine={{ stroke: 'var(--border)' }} tickLine={false} />
+            <YAxis tickFormatter={compactFmt} tick={vizTickStyle} axisLine={false} tickLine={false} width={52} />
+            <Tooltip content={<VizTooltip valueFmt={compactFmt} />} cursor={{ fill: 'var(--raised)', opacity: 0.5 }} />
+            <Bar dataKey="ingresos" name="Ingresos" fill="var(--teal)" radius={[4, 4, 0, 0]} maxBarSize={32} isAnimationActive={false} />
+            <Bar dataKey="gastos" name="Gastos" fill="var(--danger)" radius={[4, 4, 0, 0]} maxBarSize={32} opacity={0.65} isAnimationActive={false} />
+            <Line type="monotone" dataKey="utilidad" name="Utilidad" stroke="var(--warn)" strokeWidth={2.5} dot={{ r: 3, fill: 'var(--warn)' }} isAnimationActive={false} />
+          </ComposedChart>
+        </ResponsiveContainer>
+      );
+    }
+
+    if (type === 'line') {
+      return (
+        <ResponsiveContainer width="100%" height={minH - 36}>
+          <ComposedChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 4 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke={vizGridStroke} vertical={false} />
+            <XAxis dataKey="name" tick={vizTickStyle} axisLine={{ stroke: 'var(--border)' }} tickLine={false} />
+            <YAxis tickFormatter={compactFmt} tick={vizTickStyle} axisLine={false} tickLine={false} width={52} />
+            <Tooltip content={<VizTooltip valueFmt={v => fmtCOP(v)} />} cursor={{ stroke: 'var(--border)' }} />
+            <Line type="monotone" dataKey="value" name="Ingreso" stroke={accent} strokeWidth={2.5} dot={{ r: 3, fill: accent }} isAnimationActive={false} />
+          </ComposedChart>
+        </ResponsiveContainer>
+      );
+    }
+
+    if (type === 'area') {
+      return (
+        <ResponsiveContainer width="100%" height={minH - 36}>
+          <ComposedChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 4 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke={vizGridStroke} vertical={false} />
+            <XAxis dataKey="name" tick={vizTickStyle} axisLine={{ stroke: 'var(--border)' }} tickLine={false} />
+            <YAxis tickFormatter={compactFmt} tick={vizTickStyle} axisLine={false} tickLine={false} width={52} />
+            <Tooltip content={<VizTooltip valueFmt={v => fmtCOP(v)} />} />
+            <Area type="monotone" dataKey="value" name="Ingreso" stroke={accent} fill={accent} fillOpacity={0.18} strokeWidth={2} isAnimationActive={false} />
+          </ComposedChart>
+        </ResponsiveContainer>
+      );
+    }
+
+    if (type === 'bar_h') {
+      const sorted = [...data].sort((a, b) => (b.value ?? b.utilidad) - (a.value ?? a.utilidad));
+      const barH = Math.max(minH - 36, sorted.length * 28 + 16);
+      return (
+        <ResponsiveContainer width="100%" height={barH}>
+          <BarChart data={sorted} layout="vertical" margin={{ left: 4, right: 48, top: 4, bottom: 4 }} barSize={14}>
+            <CartesianGrid strokeDasharray="3 3" stroke={vizGridStroke} horizontal={false} />
+            <XAxis type="number" tickFormatter={compactFmt} tick={vizTickStyle} axisLine={false} tickLine={false} />
+            <YAxis type="category" dataKey="name" width={72} tick={vizTickStyle} axisLine={false} tickLine={false} />
+            <Tooltip content={<VizTooltip valueFmt={v => fmtCOP(v)} />} cursor={{ fill: 'var(--raised)', opacity: 0.5 }} />
+            <Bar dataKey="value" name="Utilidad" fill={accent} radius={[0, 4, 4, 0]} isAnimationActive={false} />
+          </BarChart>
+        </ResponsiveContainer>
+      );
+    }
+
+    if (type === 'radial') {
+      const pct = Math.max(0, Math.min(data[0].value, 100));
+      const col = marginColor(pct);
+      const gaugeData = [{ name: 'margen', value: pct, fill: col }];
+      return (
+        <div style={{ position: 'relative', width: '100%', height: minH - 36 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <RadialBarChart innerRadius="72%" outerRadius="100%" data={gaugeData} startAngle={220} endAngle={-40} barSize={12}>
+              <PolarAngleAxis type="number" domain={[0, 30]} tick={false} />
+              <RadialBar background={{ fill: 'var(--raised)' }} dataKey="value" cornerRadius={6} clockWise />
+            </RadialBarChart>
+          </ResponsiveContainer>
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+            <span style={{ fontSize: 22, fontWeight: 700, fontFamily: 'var(--mono)', color: col, lineHeight: 1 }}>{pct.toFixed(1)}%</span>
+            <span style={{ fontSize: 10, fontWeight: 600, color: col, marginTop: 3, textTransform: 'uppercase', letterSpacing: '.05em' }}>{marginLabel(pct)}</span>
+          </div>
+        </div>
+      );
+    }
+
+    // bar (vertical, default)
+    return (
+      <ResponsiveContainer width="100%" height={minH - 36}>
+        <BarChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 4 }} barSize={28}>
+          <CartesianGrid strokeDasharray="3 3" stroke={vizGridStroke} vertical={false} />
+          <XAxis dataKey="name" tick={vizTickStyle} axisLine={{ stroke: 'var(--border)' }} tickLine={false} />
+          <YAxis tickFormatter={compactFmt} tick={vizTickStyle} axisLine={false} tickLine={false} width={52} />
+          <Tooltip content={<VizTooltip valueFmt={v => fmtCOP(v)} />} cursor={{ fill: 'var(--raised)', opacity: 0.5 }} />
+          <Bar dataKey="value" name="Valor" fill={accent} radius={[4, 4, 0, 0]} isAnimationActive={false} />
+        </BarChart>
+      </ResponsiveContainer>
+    );
+  };
+
+  return (
+    <div style={shellStyle}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink-1)', marginBottom: 10 }}>{title}</div>
+      {renderChart()}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════
    APP
 ══════════════════════════════════════════ */
 function App() {
@@ -991,9 +1308,10 @@ function App() {
                       </div>
                     </>}
                     {metricas && (() => {
-                      const hint      = dp?.chart_hint || 'comparativo';
-                      const gastos    = dp?.rentabilidad?.gastos_operativos || dp?.resumen?.gastos_detalle;
+                      const dp        = lastResp?.datos_panel;
+                      const vizSpec   = dp?.viz_spec;
                       const fleetKpis = dp?.fleet_kpis || [];
+                      const gastos    = dp?.rentabilidad?.gastos_operativos || dp?.resumen?.gastos_detalle;
                       const ingresosObj = (dp?.viajes || []).length > 0
                         ? Object.fromEntries(
                             (dp.viajes).slice(0,6).map(v => [
@@ -1005,8 +1323,8 @@ function App() {
                           )
                         : null;
 
-                      // ── Vista KPI de flota (FleetCockpit) ──
-                      if (fleetKpis.length > 0) {
+                      // ── Vista KPI de flota (FleetCockpit) — solo intención mixta ──
+                      if (fleetKpis.length > 0 && lastResp?.intencion === 'mixta') {
                         const totals = {
                           ingresos_total:  fleetKpis.reduce((s,v) => s + v.ingresos, 0),
                           gastos_total:    fleetKpis.reduce((s,v) => s + v.gastos, 0),
@@ -1021,7 +1339,13 @@ function App() {
                         />;
                       }
 
-                      // Vista financiera estándar: gráficos por viaje / categoría
+                      // Gráfico dinámico elegido por el LLM
+                      if (vizSpec?.type) {
+                        return <VizRenderer vizSpec={vizSpec} datosPanel={dp} />;
+                      }
+
+                      // Vista financiera estándar (fallback sin viz_spec)
+                      const hint = dp?.chart_hint || 'comparativo';
                       const showIngresos = (hint === 'ingresos' || hint === 'comparativo') && ingresosObj;
                       const showGastos   = (hint === 'gastos'   || hint === 'comparativo') && gastos && Object.keys(gastos).length > 0;
                       return <>
