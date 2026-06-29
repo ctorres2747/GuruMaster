@@ -115,6 +115,7 @@ def chat(req: ChatRequest):
 
     if intencion == "activos" and sql_data.get("activos"):
         a = sql_data["activos"]
+        viz_spec_activos = entidades.get("viz_spec")
         datos_panel = {
             "tipo": "activos",
             "vehiculo_id": vehiculo_id,
@@ -123,6 +124,7 @@ def chat(req: ChatRequest):
             "alertas": a.get("alertas_sistema") or [],
             "documentos_por_vencer": a.get("documentos_por_vencer") or [],
             "flota": a.get("flota") or [],
+            "viz_spec": viz_spec_activos,
         }
     elif intencion in ("financiera", "mixta"):
         viz_spec = entidades.get("viz_spec")
