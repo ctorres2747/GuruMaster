@@ -128,9 +128,8 @@ def chat(req: ChatRequest):
         }
     elif intencion in ("financiera", "mixta"):
         viz_spec = entidades.get("viz_spec")
-        needs_fleet = (
-            not vehiculo_id
-            and isinstance(viz_spec, dict)
+        needs_fleet_kpis = (
+            isinstance(viz_spec, dict)
             and viz_spec.get("data_key") == "fleet_kpis"
         )
         datos_panel = {
@@ -149,9 +148,9 @@ def chat(req: ChatRequest):
                     a for a in alertas if a.get("nivel_alerta") in ("Critica", "Alta")
                 ][:6]
             if not vehiculo_id:
-                datos_panel["fleet_kpis"] = query_fleet_kpis()
                 datos_panel["doc_risk"] = query_doc_risk_summary()
-        elif needs_fleet:
+        # Cargar KPIs de flota cuando el gráfico lo requiere o la consulta es de flota
+        if needs_fleet_kpis or (intencion == "mixta" and not vehiculo_id):
             datos_panel["fleet_kpis"] = query_fleet_kpis()
 
     panel_disponible = datos_panel is not None and bool(sql_data)
